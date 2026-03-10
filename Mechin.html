@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mechin - Tu mecánico de confianza</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo-container">
+            <span class="logo-m">M</span> <span class="logo-text">Mechin</span> </div>
+        <ul class="nav-links">
+            <li><a href="#">Inicio</a></li>
+            <li><a href="#">Mecánicos</a></li>
+            <li><a href="#">Repuestos</a></li>
+            <li><a href="#" class="btn-login">Ingresar</a></li>
+        </ul>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-content">
+            <h1>Tu mecánico de confianza, <br><span>donde lo necesites.</span></h1> <p>La plataforma que conecta a conductores de Manizales con mecánicos certificados a domicilio. </p>
+            <div class="hero-btns">
+                <a href="#" class="btn-primary">Solicitar Servicio</a>
+                <a href="#" class="btn-secondary">Explorar Tiendas</a>
+            </div>
+        </div>
+    </header>
+
+<section class="services-container">
+        <h2 class="section-title">¿Qué ofrece Mechin?</h2>
+        <div class="services-grid">
+            <div class="service-card">
+                <div class="icon">🛠️</div>
+                <h3>Mecánicos Certificados</h3>
+                <p>Conectamos con expertos validados para reparaciones a domicilio con total transparencia[cite: 8, 12].</p>
+            </div>
+
+            <div class="service-card">
+                <div class="icon">📦</div>
+                <h3>Repuestos Locales</h3>
+                <p>Accede a un catálogo digital de tiendas en Manizales para tus partes automotrices[cite: 20, 36].</p>
+            </div>
+
+            <div class="service-card">
+                <div class="icon">📍</div>
+                <h3>Geolocalización</h3>
+                <p>Asignación eficiente del servicio basada en tu ubicación para reducir tiempos de espera[cite: 20, 33].</p>
+            </div>
+
+            <div class="service-card">
+                <div class="icon">💳</div>
+                <h3>Pagos Seguros</h3>
+                <p>Realiza transacciones digitales integradas con trazabilidad completa de tu servicio[cite: 20, 30].</p>
+            </div>
+        </div>
+    </section>
+
+ <section class="profiles-section">
+        <h2 class="section-title">¿Cómo quieres usar Mechin?</h2>
+        <div class="profiles-container">
+            <article class="profile-card highlighted">
+                <div class="profile-header">
+                    <h3>Mecánico</h3>
+                </div>
+                <ul class="profile-features">
+                    <li>Perfil profesional [cite: 14]</li>
+                    <li>Gestión de servicios [cite: 30]</li>
+                    <li>Certificación oficial [cite: 12]</li>
+                </ul>
+                <a href="#registro-mecanico" class="btn-profile" id="btn-soy-mecanico">Soy Mecánico</a>
+            </article>
+
+            </div>
+    </section>
+
+    <section id="registro-mecanico" class="registration-form-section hidden">
+        <div class="form-wrapper">
+            <h2>Registro de Perfil Profesional</h2> <p>Especialízate y conéctate con conductores en Manizales.</p>
+            
+            <form class="mechin-form">
+                <div class="form-group">
+                    <label>Carta de Presentación</label> <textarea placeholder="Cuéntale a tus clientes sobre tu experiencia..." rows="3"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Especialidades</label> <select multiple>
+                        <option>Mecánica general</option>
+                        <option>Eléctrica</option>
+                        <option>Diagnóstico</option>
+                    </select>
+                    <small>Mantén presionada la tecla Ctrl para seleccionar varias.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Historial de Servicios (Opcional)</label> <textarea placeholder="Resumen de trabajos previos destacados..."></textarea>
+                </div>
+
+                <button type="submit" class="btn-submit">Finalizar Registro</button>
+            </form>
+        </div>
+    </section>
+
+<script src="Mechin.js"></script>
+</body>
+</html>
