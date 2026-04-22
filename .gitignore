@@ -1,0 +1,13 @@
+# Ignora node_modules en cualquier subcarpeta
+**/node_modules/
+node_modules/
+
+# Ignora archivos de entorno (seguridad)
+.env
+**/.env
+
+# Ignora carpetas de compilación
+dist/
+**/dist/
+build/
+**/build/
