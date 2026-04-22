@@ -11,7 +11,9 @@ class AuthService {
     return axios.post(API_URL + 'login', { email, password })
       .then(response => {
         if (response.data.token) {
-          localStorage.setItem('token', JSON.stringify(response.data.token));
+          // CORRECCIÓN: guardamos el token como string plano, no con JSON.stringify
+          // JSON.stringify sobre un string lo envuelve en comillas extra: "\"abc123\""
+          localStorage.setItem('token', response.data.token);
           localStorage.setItem('user', JSON.stringify(response.data.user));
         }
         return response.data;
@@ -32,7 +34,16 @@ class AuthService {
   }
 
   getCurrentUser() {
-    return JSON.parse(localStorage.getItem('user'));
+    const user = localStorage.getItem('user');
+    return user ? JSON.parse(user) : null;
+  }
+
+  getToken() {
+    return localStorage.getItem('token');
+  }
+
+  isAuthenticated() {
+    return !!this.getToken();
   }
 }
 
