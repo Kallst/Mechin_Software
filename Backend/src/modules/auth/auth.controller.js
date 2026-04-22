@@ -3,57 +3,106 @@ const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const db = require('../../config/db');
 
+// ============================================================
+// MECHIN-4 — Registro de usuario
+// ============================================================
 exports.register = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
   const { firstName, lastName, email, phone, city, password, role, specialties } = req.body;
 
+  // Combinamos nombre completo para la BD
+  const nombreCompleto = `${firstName} ${lastName}`;
+
+  // Mapeamos el rol del frontend al nombre en la BD
+  const rolMap = { client: 'cliente', mechanic: 'mecanico', store: 'tienda' };
+  const rolNombre = rolMap[role] || role;
+
   try {
-    // Check if user exists
-    const userResult = await db.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (userResult.rows.length > 0) {
-      return res.status(400).json({ msg: 'El usuario ya existe' });
+    // Verificar si el correo ya existe
+    const existe = await db.query('SELECT id FROM usuarios WHERE correo = $1', [email]);
+    if (existe.rows.length > 0) {
+      return res.status(409).json({ msg: 'El correo ya está registrado' });
     }
 
-    // Get role id
-    const roleResult = await db.query('SELECT id FROM roles WHERE name = $1', [role]);
-    if (roleResult.rows.length === 0) {
+    // Obtener el id del rol
+    const rolResult = await db.query('SELECT id FROM roles WHERE nombre = $1', [rolNombre]);
+    if (rolResult.rows.length === 0) {
       return res.status(400).json({ msg: 'Rol inválido' });
     }
-    const roleId = roleResult.rows[0].id;
+    const rolId = rolResult.rows[0].id;
 
-    // Hash password
+    // Hash de la contraseña
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const contrasenaHash = await bcrypt.hash(password, salt);
 
-    // Create user
-    const newUserResult = await db.query(
-      'INSERT INTO users (role_id, first_name, last_name, email, phone, city, password) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-      [roleId, firstName, lastName, email, phone, city, hashedPassword]
+    // Insertar el usuario
+    const nuevoUsuario = await db.query(
+      `INSERT INTO usuarios (nombre_completo, correo, telefono, contrasena_hash)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [nombreCompleto, email, phone || null, contrasenaHash]
     );
-    const userId = newUserResult.rows[0].id;
+    const usuarioId = nuevoUsuario.rows[0].id;
 
-    // Add specialties if mechanic
-    if (role === 'mechanic' && specialties && specialties.length > 0) {
-      for (const spec of specialties) {
-        await db.query('INSERT INTO mechanic_specialties (user_id, specialty) VALUES ($1, $2)', [userId, spec]);
+    // Asignar el rol en usuarios_roles (relación muchos a muchos)
+    await db.query(
+      'INSERT INTO usuarios_roles (usuario_id, rol_id) VALUES ($1, $2)',
+      [usuarioId, rolId]
+    );
+
+    // Si es mecánico, crear perfil y asignar especialidades
+    if (rolNombre === 'mecanico') {
+      const perfilResult = await db.query(
+        `INSERT INTO perfiles_mecanico (usuario_id, ciudad) VALUES ($1, $2) RETURNING id`,
+        [usuarioId, city || null]
+      );
+      const perfilId = perfilResult.rows[0].id;
+
+      // Asignar especialidades si vienen en el registro
+      if (specialties && specialties.length > 0) {
+        for (const nombreEspecialidad of specialties) {
+          const espResult = await db.query(
+            'SELECT id FROM especialidades WHERE nombre = $1',
+            [nombreEspecialidad]
+          );
+          if (espResult.rows.length > 0) {
+            await db.query(
+              'INSERT INTO mecanico_especialidades (perfil_mecanico_id, especialidad_id) VALUES ($1, $2)',
+              [perfilId, espResult.rows[0].id]
+            );
+          }
+        }
       }
     }
 
-    // Crear el JWT
-    const payload = { user: { id: userId, role } };
-    jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' }, (err, token) => {
+    // Si es tienda, crear perfil de tienda
+    if (rolNombre === 'tienda') {
+      await db.query(
+        `INSERT INTO tiendas (usuario_id, nombre) VALUES ($1, $2)`,
+        [usuarioId, nombreCompleto]
+      );
+    }
+
+    // Generar JWT
+    const payload = { user: { id: usuarioId, role: rolNombre } };
+    jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '24h' }, (err, token) => {
       if (err) throw err;
-      res.json({ token, user: { id: userId, firstName, lastName, email, role } });
+      res.status(201).json({
+        token,
+        user: { id: usuarioId, nombreCompleto, email, role: rolNombre }
+      });
     });
 
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Error en el servidor');
+    res.status(500).json({ msg: 'Error en el servidor' });
   }
 };
 
+// ============================================================
+// MECHIN-12 — Inicio de sesión
+// ============================================================
 exports.login = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -61,116 +110,182 @@ exports.login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const userResult = await db.query(
-      'SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.email = $1',
+    // Buscar usuario con su rol mediante JOIN
+    const result = await db.query(
+      `SELECT u.id, u.nombre_completo, u.correo, u.contrasena_hash, u.esta_activo,
+              r.nombre AS rol
+       FROM usuarios u
+       JOIN usuarios_roles ur ON u.id = ur.usuario_id
+       JOIN roles r ON ur.rol_id = r.id
+       WHERE u.correo = $1`,
       [email]
     );
 
-    if (userResult.rows.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(400).json({ msg: 'Credenciales inválidas' });
     }
 
-    const user = userResult.rows[0];
+    const usuario = result.rows[0];
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ msg: 'Contraseña incorrecta' });
+    // Verificar que la cuenta esté activa
+    if (!usuario.esta_activo) {
+      return res.status(403).json({ msg: 'Cuenta desactivada. Contacta al administrador' });
     }
 
-    const payload = { user: { id: user.id, role: user.role_name } };
-    jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '5h' }, (err, token) => {
+    // Verificar contraseña
+    const coincide = await bcrypt.compare(password, usuario.contrasena_hash);
+    if (!coincide) {
+      return res.status(400).json({ msg: 'Credenciales inválidas' });
+    }
+
+    // Generar JWT
+    const payload = { user: { id: usuario.id, role: usuario.rol } };
+    jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '24h' }, (err, token) => {
       if (err) throw err;
-      res.json({ token, user: { id: user.id, firstName: user.first_name, lastName: user.last_name, email: user.email, role: user.role_name } });
+      res.json({
+        token,
+        user: {
+          id: usuario.id,
+          nombreCompleto: usuario.nombre_completo,
+          email: usuario.correo,
+          role: usuario.rol
+        }
+      });
     });
 
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Error en el servidor');
+    res.status(500).json({ msg: 'Error en el servidor' });
   }
 };
 
+// ============================================================
+// MECHIN-30 — Obtener usuario autenticado
+// ============================================================
 exports.getUser = async (req, res) => {
   try {
-    const userResult = await db.query(
-      'SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.city, r.name as role FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = $1',
+    const result = await db.query(
+      `SELECT u.id, u.nombre_completo, u.correo, u.telefono, u.esta_activo,
+              r.nombre AS rol
+       FROM usuarios u
+       JOIN usuarios_roles ur ON u.id = ur.usuario_id
+       JOIN roles r ON ur.rol_id = r.id
+       WHERE u.id = $1`,
       [req.user.id]
     );
-    res.json(userResult.rows[0]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ msg: 'Usuario no encontrado' });
+    }
+    res.json(result.rows[0]);
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Error en el servidor');
+    res.status(500).json({ msg: 'Error en el servidor' });
   }
 };
 
+// ============================================================
+// MECHIN-22 — Cierre de sesión
+// ============================================================
 exports.logout = (req, res) => {
-  // In a stateless JWT setup logout is typically handled client-side by deleting the token.. usually
-  // We'll just return a success message btw
+  // El token se invalida en el cliente eliminándolo del almacenamiento local
   res.json({ msg: 'Sesión cerrada exitosamente' });
 };
 
+// ============================================================
+// MECHIN-28 — Recuperación de contraseña (fase 1: solicitud)
+// ============================================================
 exports.forgotPassword = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
   const { email } = req.body;
+
   try {
-    const userResult = await db.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (userResult.rows.length === 0) {
-      // Return success even if user not found for security reasons .. kidding
-      return res.json({ msg: 'Si el correo existe, se enviará un código de recuperación' });
+    const result = await db.query('SELECT id FROM usuarios WHERE correo = $1', [email]);
+
+    // Respuesta genérica por seguridad (no revelar si el correo existe)
+    if (result.rows.length === 0) {
+      return res.json({ msg: 'Si el correo existe, recibirás un código de recuperación' });
     }
-    const userId = userResult.rows[0].id;
 
-    // Generate 6 digit code
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 15 * 60000); // 15 mins
+    const usuarioId = result.rows[0].id;
 
-    await db.query('DELETE FROM password_resets WHERE user_id = $1', [userId]);
-    await db.query('INSERT INTO password_resets (user_id, code, expires_at) VALUES ($1, $2, $3)', [userId, code, expiresAt]);
+    // Generar código de 6 dígitos como token
+    const token = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiraEn = new Date(Date.now() + 15 * 60000); // 15 minutos
 
-    // SIMULATE EMAIL SENDING!! Always on console.. bc auth is local
-    console.log(`\n========================================`);
-    console.log(`📧 SIMULACIÓN DE CORREO ENVIADO A: ${email}`);
-    console.log(`🔑 CÓDIGO DE RECUPERACIÓN: ${code}`);
-    console.log(`========================================\n`);
+    // Eliminar tokens anteriores del mismo usuario
+    await db.query('DELETE FROM recuperacion_contrasena WHERE usuario_id = $1', [usuarioId]);
 
-    res.json({ msg: 'Si el correo existe, se enviará un código de recuperación' });
+    // Insertar nuevo token con los campos correctos de la BD
+    await db.query(
+      'INSERT INTO recuperacion_contrasena (usuario_id, token, expira_en) VALUES ($1, $2, $3)',
+      [usuarioId, token, expiraEn]
+    );
+
+    // Simulación de envío de correo (en desarrollo)
+    console.log('\n========================================');
+    console.log(`📧 SIMULACIÓN DE CORREO — ${email}`);
+    console.log(`🔑 CÓDIGO: ${token}`);
+    console.log('========================================\n');
+
+    res.json({ msg: 'Si el correo existe, recibirás un código de recuperación' });
 
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Error en el servidor');
+    res.status(500).json({ msg: 'Error en el servidor' });
   }
 };
 
+// ============================================================
+// MECHIN-28 — Recuperación de contraseña (fase 2: verificación)
+// ============================================================
 exports.verifyCode = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
   const { email, code, newPassword } = req.body;
-  
-  try {
-    const userResult = await db.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (userResult.rows.length === 0) return res.status(400).json({ msg: 'Código inválido o expirado' });
-    
-    const userId = userResult.rows[0].id;
 
-    const resetResult = await db.query('SELECT * FROM password_resets WHERE user_id = $1 AND code = $2 AND expires_at > NOW()', [userId, code]);
-    
-    if (resetResult.rows.length === 0) {
+  try {
+    // Buscar el usuario por correo
+    const userResult = await db.query('SELECT id FROM usuarios WHERE correo = $1', [email]);
+    if (userResult.rows.length === 0) {
+      return res.status(400).json({ msg: 'Código inválido o expirado' });
+    }
+    const usuarioId = userResult.rows[0].id;
+
+    // Verificar el token: debe existir, no estar usado y no haber expirado
+    const tokenResult = await db.query(
+      `SELECT id FROM recuperacion_contrasena
+       WHERE usuario_id = $1 AND token = $2
+       AND expira_en > NOW() AND usado = FALSE`,
+      [usuarioId, code]
+    );
+
+    if (tokenResult.rows.length === 0) {
       return res.status(400).json({ msg: 'Código inválido o expirado' });
     }
 
-    // Hash new password
+    // Hash de la nueva contraseña
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    const nuevaHash = await bcrypt.hash(newPassword, salt);
 
-    await db.query('UPDATE users SET password = $1 WHERE id = $2', [hashedPassword, userId]);
-    await db.query('DELETE FROM password_resets WHERE user_id = $1', [userId]);
+    // Actualizar contraseña del usuario
+    await db.query(
+      'UPDATE usuarios SET contrasena_hash = $1 WHERE id = $2',
+      [nuevaHash, usuarioId]
+    );
+
+    // Marcar el token como usado (no eliminarlo, para auditoría)
+    await db.query(
+      'UPDATE recuperacion_contrasena SET usado = TRUE WHERE id = $1',
+      [tokenResult.rows[0].id]
+    );
 
     res.json({ msg: 'Contraseña actualizada correctamente' });
 
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Error en el servidor');
+    res.status(500).json({ msg: 'Error en el servidor' });
   }
 };
