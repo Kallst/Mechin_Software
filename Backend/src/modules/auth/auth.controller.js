@@ -95,7 +95,7 @@ exports.register = async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err.message);
+    console.error('ERROR REGISTRO:', err);
     res.status(500).json({ msg: 'Error en el servidor' });
   }
 };
