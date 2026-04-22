@@ -11,3 +11,5 @@ dist/
 **/dist/
 build/
 **/build/
+.vscode
+Mechin Local.session.sql
