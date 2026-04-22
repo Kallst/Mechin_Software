@@ -3,28 +3,21 @@
 -- Motor: PostgreSQL
 -- Descripción: Marketplace de servicios automotrices — Manizales
 -- Stack: React + Node.js + PostgreSQL
+-- Versión: Idempotente (se puede ejecutar múltiples veces sin errores)
 -- ============================================================
-
--- Eliminar base de datos si existe y crearla limpia
--- DROP DATABASE IF EXISTS mechin_db;
--- CREATE DATABASE mechin_db;
--- \c mechin_db;
-
--- Extensión para UUIDs si se requiere en el futuro
--- CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================
 -- MÓDULO 1 — GESTIÓN DE USUARIOS
 -- ============================================================
 
-CREATE TABLE roles (
+CREATE TABLE IF NOT EXISTS roles (
     id               SERIAL PRIMARY KEY,
     nombre           VARCHAR(50)  NOT NULL UNIQUE,
     descripcion      VARCHAR(255),
     creado_en        TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE usuarios (
+CREATE TABLE IF NOT EXISTS usuarios (
     id               SERIAL PRIMARY KEY,
     nombre_completo  VARCHAR(150) NOT NULL,
     correo           VARCHAR(150) NOT NULL UNIQUE,
@@ -40,7 +33,7 @@ CREATE TABLE usuarios (
     actualizado_en   TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE usuarios_roles (
+CREATE TABLE IF NOT EXISTS usuarios_roles (
     id               SERIAL PRIMARY KEY,
     usuario_id       INT          NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     rol_id           INT          NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
@@ -48,7 +41,7 @@ CREATE TABLE usuarios_roles (
     UNIQUE (usuario_id, rol_id)
 );
 
-CREATE TABLE recuperacion_contrasena (
+CREATE TABLE IF NOT EXISTS recuperacion_contrasena (
     id               SERIAL PRIMARY KEY,
     usuario_id       INT          NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     token            VARCHAR(255) NOT NULL UNIQUE,
@@ -57,7 +50,7 @@ CREATE TABLE recuperacion_contrasena (
     creado_en        TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE logs_acceso (
+CREATE TABLE IF NOT EXISTS logs_acceso (
     id               SERIAL PRIMARY KEY,
     usuario_id       INT          NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     accion           VARCHAR(100) NOT NULL,
@@ -71,7 +64,7 @@ CREATE TABLE logs_acceso (
 -- MÓDULO 2 — PERFILES DE MECÁNICOS
 -- ============================================================
 
-CREATE TABLE perfiles_mecanico (
+CREATE TABLE IF NOT EXISTS perfiles_mecanico (
     id                SERIAL PRIMARY KEY,
     usuario_id        INT           NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
     biografia         TEXT,
@@ -89,13 +82,13 @@ CREATE TABLE perfiles_mecanico (
     actualizado_en    TIMESTAMP     NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE especialidades (
+CREATE TABLE IF NOT EXISTS especialidades (
     id               SERIAL PRIMARY KEY,
     nombre           VARCHAR(100) NOT NULL UNIQUE,
     descripcion      VARCHAR(300)
 );
 
-CREATE TABLE mecanico_especialidades (
+CREATE TABLE IF NOT EXISTS mecanico_especialidades (
     id                  SERIAL PRIMARY KEY,
     perfil_mecanico_id  INT       NOT NULL REFERENCES perfiles_mecanico(id) ON DELETE CASCADE,
     especialidad_id     INT       NOT NULL REFERENCES especialidades(id) ON DELETE RESTRICT,
@@ -103,7 +96,7 @@ CREATE TABLE mecanico_especialidades (
     UNIQUE (perfil_mecanico_id, especialidad_id)
 );
 
-CREATE TABLE disponibilidad_mecanico (
+CREATE TABLE IF NOT EXISTS disponibilidad_mecanico (
     id                  SERIAL PRIMARY KEY,
     perfil_mecanico_id  INT          NOT NULL REFERENCES perfiles_mecanico(id) ON DELETE CASCADE,
     dia_semana          VARCHAR(15)  NOT NULL
@@ -120,7 +113,7 @@ CREATE TABLE disponibilidad_mecanico (
 -- MÓDULO 3 — SERVICIOS MECÁNICOS
 -- ============================================================
 
-CREATE TABLE servicios (
+CREATE TABLE IF NOT EXISTS servicios (
     id                   SERIAL PRIMARY KEY,
     cliente_id           INT           NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
     mecanico_id          INT           REFERENCES perfiles_mecanico(id) ON DELETE SET NULL,
@@ -141,7 +134,7 @@ CREATE TABLE servicios (
     actualizado_en       TIMESTAMP     NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE estados_servicio (
+CREATE TABLE IF NOT EXISTS estados_servicio (
     id               SERIAL PRIMARY KEY,
     servicio_id      INT          NOT NULL REFERENCES servicios(id) ON DELETE CASCADE,
     usuario_id       INT          NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
@@ -151,7 +144,7 @@ CREATE TABLE estados_servicio (
     registrado_en    TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE cancelaciones_servicio (
+CREATE TABLE IF NOT EXISTS cancelaciones_servicio (
     id               SERIAL PRIMARY KEY,
     servicio_id      INT          NOT NULL REFERENCES servicios(id) ON DELETE CASCADE,
     cancelado_por    INT          NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
@@ -160,7 +153,7 @@ CREATE TABLE cancelaciones_servicio (
     cancelado_en     TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE validaciones_solicitud (
+CREATE TABLE IF NOT EXISTS validaciones_solicitud (
     id               SERIAL PRIMARY KEY,
     servicio_id      INT       NOT NULL REFERENCES servicios(id) ON DELETE CASCADE,
     validado_por     INT       NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
@@ -169,7 +162,7 @@ CREATE TABLE validaciones_solicitud (
     validado_en      TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE notificaciones (
+CREATE TABLE IF NOT EXISTS notificaciones (
     id               SERIAL PRIMARY KEY,
     usuario_id       INT          NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     servicio_id      INT          REFERENCES servicios(id) ON DELETE SET NULL,
@@ -183,7 +176,7 @@ CREATE TABLE notificaciones (
 -- MÓDULO 4 — SISTEMA DE REPUTACIÓN
 -- ============================================================
 
-CREATE TABLE calificaciones (
+CREATE TABLE IF NOT EXISTS calificaciones (
     id                SERIAL PRIMARY KEY,
     servicio_id       INT       NOT NULL REFERENCES servicios(id) ON DELETE CASCADE,
     cliente_id        INT       NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
@@ -195,7 +188,7 @@ CREATE TABLE calificaciones (
     UNIQUE (servicio_id, cliente_id)
 );
 
-CREATE TABLE comentarios (
+CREATE TABLE IF NOT EXISTS comentarios (
     id               SERIAL PRIMARY KEY,
     calificacion_id  INT       NOT NULL REFERENCES calificaciones(id) ON DELETE CASCADE,
     cliente_id       INT       NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
@@ -211,7 +204,7 @@ CREATE TABLE comentarios (
 -- MÓDULO 5 — CATÁLOGO DE REPUESTOS
 -- ============================================================
 
-CREATE TABLE tiendas (
+CREATE TABLE IF NOT EXISTS tiendas (
     id               SERIAL PRIMARY KEY,
     usuario_id       INT          NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
     nombre           VARCHAR(200) NOT NULL,
@@ -224,14 +217,14 @@ CREATE TABLE tiendas (
     actualizado_en   TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE categorias_repuesto (
+CREATE TABLE IF NOT EXISTS categorias_repuesto (
     id               SERIAL PRIMARY KEY,
     nombre           VARCHAR(100) NOT NULL UNIQUE,
     descripcion      VARCHAR(300),
     creado_en        TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE repuestos (
+CREATE TABLE IF NOT EXISTS repuestos (
     id               SERIAL PRIMARY KEY,
     tienda_id        INT           NOT NULL REFERENCES tiendas(id) ON DELETE CASCADE,
     categoria_id     INT           NOT NULL REFERENCES categorias_repuesto(id) ON DELETE RESTRICT,
@@ -254,7 +247,7 @@ CREATE TABLE repuestos (
 -- MÓDULO 6 — PAGOS Y TRANSACCIONES
 -- ============================================================
 
-CREATE TABLE pagos (
+CREATE TABLE IF NOT EXISTS pagos (
     id                    SERIAL PRIMARY KEY,
     servicio_id           INT           NOT NULL UNIQUE REFERENCES servicios(id) ON DELETE RESTRICT,
     cliente_id            INT           NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
@@ -271,7 +264,7 @@ CREATE TABLE pagos (
     actualizado_en        TIMESTAMP     NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE desglose_pago (
+CREATE TABLE IF NOT EXISTS desglose_pago (
     id               SERIAL PRIMARY KEY,
     pago_id          INT           NOT NULL REFERENCES pagos(id) ON DELETE CASCADE,
     concepto         VARCHAR(150)  NOT NULL,
@@ -280,7 +273,7 @@ CREATE TABLE desglose_pago (
     creado_en        TIMESTAMP     NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE transacciones (
+CREATE TABLE IF NOT EXISTS transacciones (
     id               SERIAL PRIMARY KEY,
     pago_id          INT           NOT NULL REFERENCES pagos(id) ON DELETE CASCADE,
     tipo             VARCHAR(50)   NOT NULL,
@@ -293,7 +286,7 @@ CREATE TABLE transacciones (
 -- MÓDULO 7 — PANEL ADMINISTRATIVO
 -- ============================================================
 
-CREATE TABLE reportes_incidencias (
+CREATE TABLE IF NOT EXISTS reportes_incidencias (
     id               SERIAL PRIMARY KEY,
     usuario_id       INT          NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
     servicio_id      INT          REFERENCES servicios(id) ON DELETE SET NULL,
@@ -307,7 +300,7 @@ CREATE TABLE reportes_incidencias (
     actualizado_en   TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE estadisticas_sistema (
+CREATE TABLE IF NOT EXISTS estadisticas_sistema (
     id               SERIAL PRIMARY KEY,
     metrica          VARCHAR(150) NOT NULL,
     modulo           VARCHAR(100) NOT NULL,
@@ -321,59 +314,48 @@ CREATE TABLE estadisticas_sistema (
 -- ÍNDICES — Para optimizar consultas frecuentes
 -- ============================================================
 
--- Usuarios
-CREATE INDEX idx_usuarios_correo          ON usuarios(correo);
-CREATE INDEX idx_usuarios_esta_activo     ON usuarios(esta_activo);
+CREATE INDEX IF NOT EXISTS idx_usuarios_correo          ON usuarios(correo);
+CREATE INDEX IF NOT EXISTS idx_usuarios_esta_activo     ON usuarios(esta_activo);
 
--- Usuarios roles
-CREATE INDEX idx_usuarios_roles_usuario   ON usuarios_roles(usuario_id);
-CREATE INDEX idx_usuarios_roles_rol       ON usuarios_roles(rol_id);
+CREATE INDEX IF NOT EXISTS idx_usuarios_roles_usuario   ON usuarios_roles(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_usuarios_roles_rol       ON usuarios_roles(rol_id);
 
--- Recuperación contraseña
-CREATE INDEX idx_recuperacion_token       ON recuperacion_contrasena(token);
-CREATE INDEX idx_recuperacion_usuario     ON recuperacion_contrasena(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_recuperacion_token       ON recuperacion_contrasena(token);
+CREATE INDEX IF NOT EXISTS idx_recuperacion_usuario     ON recuperacion_contrasena(usuario_id);
 
--- Perfiles mecánico
-CREATE INDEX idx_perfil_usuario           ON perfiles_mecanico(usuario_id);
-CREATE INDEX idx_perfil_disponible        ON perfiles_mecanico(disponible);
-CREATE INDEX idx_perfil_validado          ON perfiles_mecanico(esta_validado);
+CREATE INDEX IF NOT EXISTS idx_perfil_usuario           ON perfiles_mecanico(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_perfil_disponible        ON perfiles_mecanico(disponible);
+CREATE INDEX IF NOT EXISTS idx_perfil_validado          ON perfiles_mecanico(esta_validado);
 
--- Disponibilidad mecánico
-CREATE INDEX idx_disponibilidad_perfil    ON disponibilidad_mecanico(perfil_mecanico_id);
+CREATE INDEX IF NOT EXISTS idx_disponibilidad_perfil    ON disponibilidad_mecanico(perfil_mecanico_id);
 
--- Servicios
-CREATE INDEX idx_servicios_cliente        ON servicios(cliente_id);
-CREATE INDEX idx_servicios_mecanico       ON servicios(mecanico_id);
-CREATE INDEX idx_servicios_estado         ON servicios(estado);
-CREATE INDEX idx_servicios_fecha          ON servicios(fecha_solicitud);
+CREATE INDEX IF NOT EXISTS idx_servicios_cliente        ON servicios(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_servicios_mecanico       ON servicios(mecanico_id);
+CREATE INDEX IF NOT EXISTS idx_servicios_estado         ON servicios(estado);
+CREATE INDEX IF NOT EXISTS idx_servicios_fecha          ON servicios(fecha_solicitud);
 
--- Notificaciones
-CREATE INDEX idx_notificaciones_usuario   ON notificaciones(usuario_id);
-CREATE INDEX idx_notificaciones_leida     ON notificaciones(leida);
+CREATE INDEX IF NOT EXISTS idx_notificaciones_usuario   ON notificaciones(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_notificaciones_leida     ON notificaciones(leida);
 
--- Calificaciones
-CREATE INDEX idx_calificaciones_mecanico  ON calificaciones(mecanico_id);
-CREATE INDEX idx_calificaciones_cliente   ON calificaciones(cliente_id);
-CREATE INDEX idx_calificaciones_servicio  ON calificaciones(servicio_id);
+CREATE INDEX IF NOT EXISTS idx_calificaciones_mecanico  ON calificaciones(mecanico_id);
+CREATE INDEX IF NOT EXISTS idx_calificaciones_cliente   ON calificaciones(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_calificaciones_servicio  ON calificaciones(servicio_id);
 
--- Repuestos
-CREATE INDEX idx_repuestos_tienda         ON repuestos(tienda_id);
-CREATE INDEX idx_repuestos_categoria      ON repuestos(categoria_id);
-CREATE INDEX idx_repuestos_estado         ON repuestos(estado);
-CREATE INDEX idx_repuestos_nombre         ON repuestos(nombre);
+CREATE INDEX IF NOT EXISTS idx_repuestos_tienda         ON repuestos(tienda_id);
+CREATE INDEX IF NOT EXISTS idx_repuestos_categoria      ON repuestos(categoria_id);
+CREATE INDEX IF NOT EXISTS idx_repuestos_estado         ON repuestos(estado);
+CREATE INDEX IF NOT EXISTS idx_repuestos_nombre         ON repuestos(nombre);
 
--- Pagos
-CREATE INDEX idx_pagos_cliente            ON pagos(cliente_id);
-CREATE INDEX idx_pagos_mecanico           ON pagos(mecanico_id);
-CREATE INDEX idx_pagos_servicio           ON pagos(servicio_id);
-CREATE INDEX idx_pagos_estado             ON pagos(estado);
+CREATE INDEX IF NOT EXISTS idx_pagos_cliente            ON pagos(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_pagos_mecanico           ON pagos(mecanico_id);
+CREATE INDEX IF NOT EXISTS idx_pagos_servicio           ON pagos(servicio_id);
+CREATE INDEX IF NOT EXISTS idx_pagos_estado             ON pagos(estado);
 
--- Reportes
-CREATE INDEX idx_reportes_usuario         ON reportes_incidencias(usuario_id);
-CREATE INDEX idx_reportes_estado          ON reportes_incidencias(estado);
+CREATE INDEX IF NOT EXISTS idx_reportes_usuario         ON reportes_incidencias(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_reportes_estado          ON reportes_incidencias(estado);
 
 -- ============================================================
--- DATOS SEMILLA — Datos iniciales del sistema
+-- DATOS SEMILLA — Se insertan solo si no existen
 -- ============================================================
 
 -- Roles del sistema
@@ -381,29 +363,32 @@ INSERT INTO roles (nombre, descripcion) VALUES
     ('cliente',        'Usuario que solicita servicios mecánicos'),
     ('mecanico',       'Profesional certificado que presta servicios'),
     ('tienda',         'Tienda de repuestos automotrices'),
-    ('administrador',  'Operador con acceso total al sistema');
+    ('administrador',  'Operador con acceso total al sistema')
+ON CONFLICT (nombre) DO NOTHING;
 
 -- Especialidades disponibles para mecánicos
 INSERT INTO especialidades (nombre, descripcion) VALUES
-    ('Mecánica general',        'Reparación y mantenimiento general de vehículos'),
-    ('Mecánica eléctrica',      'Diagnóstico y reparación de sistemas eléctricos'),
+    ('Mecánica general',         'Reparación y mantenimiento general de vehículos'),
+    ('Mecánica eléctrica',       'Diagnóstico y reparación de sistemas eléctricos'),
     ('Diagnóstico computarizado','Uso de escáner OBD para diagnóstico electrónico'),
-    ('Frenos y suspensión',     'Reparación de sistemas de frenos y suspensión'),
-    ('Aire acondicionado',      'Mantenimiento y recarga de sistemas de climatización'),
-    ('Transmisión',             'Reparación de cajas de cambio manuales y automáticas'),
-    ('Motor',                   'Reparación mayor y menor de motores'),
-    ('Carrocería',              'Reparación de golpes y pintura automotriz');
+    ('Frenos y suspensión',      'Reparación de sistemas de frenos y suspensión'),
+    ('Aire acondicionado',       'Mantenimiento y recarga de sistemas de climatización'),
+    ('Transmisión',              'Reparación de cajas de cambio manuales y automáticas'),
+    ('Motor',                    'Reparación mayor y menor de motores'),
+    ('Carrocería',               'Reparación de golpes y pintura automotriz')
+ON CONFLICT (nombre) DO NOTHING;
 
 -- Categorías de repuestos
 INSERT INTO categorias_repuesto (nombre, descripcion) VALUES
-    ('Filtros',             'Filtros de aire, aceite, combustible y habitáculo'),
-    ('Frenos',              'Pastillas, discos, tambores y líquido de frenos'),
-    ('Suspensión',          'Amortiguadores, resortes, bujes y rotulas'),
-    ('Eléctrico',           'Baterías, alternadores, cables y sensores'),
-    ('Motor',               'Correas, juntas, bujías y repuestos de motor'),
-    ('Transmisión',         'Clutch, embragues y partes de caja de cambios'),
-    ('Lubricantes',         'Aceites de motor, transmisión y refrigerantes'),
-    ('Carrocería',          'Espejos, luces, parachoques y accesorios externos');
+    ('Filtros',      'Filtros de aire, aceite, combustible y habitáculo'),
+    ('Frenos',       'Pastillas, discos, tambores y líquido de frenos'),
+    ('Suspensión',   'Amortiguadores, resortes, bujes y rotulas'),
+    ('Eléctrico',    'Baterías, alternadores, cables y sensores'),
+    ('Motor',        'Correas, juntas, bujías y repuestos de motor'),
+    ('Transmisión',  'Clutch, embragues y partes de caja de cambios'),
+    ('Lubricantes',  'Aceites de motor, transmisión y refrigerantes'),
+    ('Carrocería',   'Espejos, luces, parachoques y accesorios externos')
+ON CONFLICT (nombre) DO NOTHING;
 
 -- ============================================================
 -- FIN DEL SCRIPT
