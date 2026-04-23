@@ -178,7 +178,7 @@ exports.logout = (req, res) => {
 
 // ============================================================
 // MECHIN-28 — Recuperación de contraseña (fase 1: solicitud)
-// ============================================================
+// ===========================================================
 exports.forgotPassword = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
