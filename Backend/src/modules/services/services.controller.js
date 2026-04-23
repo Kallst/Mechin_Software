@@ -1,20 +1,14 @@
 const db = require('../../config/db');
 
 const createServiceRequest = async (req, res) => {
-    // LOG DE SEGURIDAD: Esto nos dirá EXACTAMENTE qué recibe el servidor
+    // LOG DE SEGURIDAD: Monitoreo en tiempo real de lo que llega del Frontend
     console.log("=== INICIO PETICIÓN ===");
     console.log("Body recibido:", req.body);
 
-    // Intentamos capturar el ID de cualquier forma y lo convertimos a número
-    let m_id = req.body.mecanico_id || req.body.mecanicoId || req.body.id_mecanico || null;
-    
-    // Si m_id es una cadena "1", lo convertimos a entero 1
-    if (m_id !== null) {
-        m_id = parseInt(m_id);
-    }
-
+    // 1. Extraemos los campos del body
     const { 
         cliente_id, 
+        mecanico_id, 
         tipo_servicio, 
         descripcion, 
         direccion_servicio, 
@@ -22,20 +16,31 @@ const createServiceRequest = async (req, res) => {
         longitud_servicio 
     } = req.body;
 
-    console.log("ID del mecánico después de procesar:", m_id);
+    // 2. Procesamos el ID del mecánico: 
+    // Aseguramos que si viene "1" (string) se convierta a 1 (int), y si no viene nada sea null.
+    const final_mecanico_id = mecanico_id ? parseInt(mecanico_id) : null;
+
+    console.log("ID del mecánico a insertar:", final_mecanico_id);
 
     try {
+        // 3. Inserción en la tabla 'servicios'
         const queryInsert = `
             INSERT INTO servicios (
-                cliente_id, mecanico_id, tipo_servicio, descripcion, 
-                direccion_servicio, latitud_servicio, longitud_servicio, estado
+                cliente_id, 
+                mecanico_id, 
+                tipo_servicio, 
+                descripcion, 
+                direccion_servicio, 
+                latitud_servicio, 
+                longitud_servicio, 
+                estado
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pendiente') 
             RETURNING *;
         `;
         
         const values = [
             parseInt(cliente_id) || 1, 
-            m_id, 
+            final_mecanico_id, 
             tipo_servicio || 'General', 
             descripcion || 'Sin descripción', 
             direccion_servicio || 'Manizales', 
@@ -45,21 +50,37 @@ const createServiceRequest = async (req, res) => {
 
         const result = await db.query(queryInsert, values);
         
-        // Registro en historial
+        // 4. CORRECCIÓN DE REFERENCIA:
+        // Según tu pgAdmin, la columna se llama 'servicio_id'. Usamos esa o 'id' como respaldo.
+        const nuevoServicioId = result.rows[0].servicio_id || result.rows[0].id;
+
+        // 5. Inserción en el historial de estados
         await db.query(
             `INSERT INTO estados_servicio (servicio_id, usuario_id, estado_anterior, estado_nuevo, observacion)
              VALUES ($1, $2, $3, $4, $5)`,
-            [result.rows[0].id, parseInt(cliente_id) || 1, 'ninguno', 'pendiente', m_id ? 'Asignado' : 'General']
+            [
+                nuevoServicioId, 
+                parseInt(cliente_id) || 1, 
+                'ninguno', 
+                'pendiente', 
+                final_mecanico_id ? 'Solicitud directa asignada' : 'Solicitud general'
+            ]
         );
 
-        console.log("✅ EXITOSO: Guardado con ID", result.rows[0].id);
+        console.log("✅ ÉXITO: Servicio guardado con ID:", nuevoServicioId);
         console.log("=== FIN PETICIÓN ===");
 
-        res.status(201).json({ ok: true, data: result.rows[0] });
+        res.status(201).json({ 
+            ok: true, 
+            data: result.rows[0] 
+        });
 
     } catch (error) {
-        console.error("❌ ERROR CRÍTICO EN DB:", error.message);
-        res.status(500).json({ ok: false, error: error.message });
+        console.error("❌ ERROR EN BASE DE DATOS:", error.message);
+        res.status(500).json({ 
+            ok: false, 
+            error: error.message 
+        });
     }
 };
 
@@ -70,7 +91,9 @@ const getActiveServicesCount = async (req, res) => {
             [req.params.clienteId]
         );
         res.json({ ok: true, count: parseInt(result.rows[0].count) });
-    } catch (e) { res.json({ ok: false, count: 0 }); }
+    } catch (e) { 
+        res.json({ ok: false, count: 0 }); 
+    }
 };
 
 module.exports = { createServiceRequest, getActiveServicesCount };
