@@ -394,6 +394,36 @@ ON CONFLICT (nombre) DO NOTHING;
 -- FIN DEL SCRIPT
 -- ============================================================
 
+--INSERTANDO DOS MECANICOS PREDETERMINADOS PARA PRUEBAS
+
 INSERT INTO usuarios (nombre_completo, correo, telefono, contrasena_hash, latitud, longitud, esta_activo)
 VALUES ('Carlos Mecánico Test', 'carlos@test.com', '3001234567', 'hash_simulado', 5.067, -75.517, true);
 
+-- 1. Insertar el Usuario
+-- Nota: Usamos 'contrasena_hash' y eliminamos 'rol' ya que tienes tabla intermedia
+INSERT INTO usuarios (nombre_completo, correo, contrasena_hash, latitud, longitud, esta_activo, esta_verificado) 
+VALUES ('Juan Pérez', 'juan.mecanico@email.com', 'hash_simulado_123', 5.0600, -75.5080, TRUE, TRUE)
+RETURNING id; -- Supongamos que este ID es el 2
+
+-- 2. Asignar el Rol de Mecánico (Rol ID 2 según tus Seeders)
+INSERT INTO usuarios_roles (usuario_id, rol_id) 
+VALUES ((SELECT id FROM usuarios WHERE correo = 'juan.mecanico@email.com'), 2);
+
+-- 3. Crear el Perfil de Mecánico
+-- Nota: Usamos 'esta_validado' y 'estado_validacion' según tu Módulo 2
+INSERT INTO perfiles_mecanico (usuario_id, biografia, esta_validado, disponible, estado_validacion, promedio_rating) 
+VALUES (
+    (SELECT id FROM usuarios WHERE correo = 'juan.mecanico@email.com'), 
+    'Mecánico experto en motos y motores de alto cilindraje con 10 años de experiencia.', 
+    TRUE, 
+    TRUE, 
+    'aprobado', 
+    4.5
+);
+
+-- 4. Asignar Especialidad
+INSERT INTO mecanico_especialidades (perfil_mecanico_id, especialidad_id) 
+VALUES (
+    (SELECT id FROM perfiles_mecanico WHERE usuario_id = (SELECT id FROM usuarios WHERE correo = 'juan.mecanico@email.com')), 
+    (SELECT id FROM especialidades WHERE nombre = 'Mecánica general')
+);

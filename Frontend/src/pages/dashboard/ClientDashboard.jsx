@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './ClientDashboard.css';
 import useGeolocation from '../../hooks/useGeolocation';
 import SolicitarModal from '../../components/SolicitarModal/SolicitarModal';
@@ -10,11 +10,12 @@ const ClientDashboard = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [userName, setUserName] = useState("Cargando...");
     const [mechanics, setMechanics] = useState([]);
-    
-    // MECHIN-67: Estado para el mecánico que el usuario selecciona
     const [selectedMechanic, setSelectedMechanic] = useState(null);
 
-    // Estado para manejar las estadísticas dinámicas
+    // Ubicación fija de Mariana (Simulada para MECHIN-71)
+    // En una fase posterior, esto vendría del hook useGeolocation
+    const clientCoords = { lat: 5.067, lng: -75.517 };
+
     const [stats, setStats] = useState({
         activos: 0,
         mecanicosCerca: 0, 
@@ -23,12 +24,15 @@ const ClientDashboard = () => {
     });
 
     /**
-     * Carga los mecánicos desde el Backend
+     * MECHIN-71: Carga los mecánicos enviando coordenadas para recibir la lista ordenada
      */
-    const loadNearbyMechanics = async () => {
+    const loadNearbyMechanics = useCallback(async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/mechanics/nearby');
+            // Enviamos las coordenadas de Mariana como Query Params
+            const url = `http://localhost:5000/api/mechanics/nearby?lat=${clientCoords.lat}&lng=${clientCoords.lng}`;
+            const response = await fetch(url);
             const data = await response.json();
+            
             if (data.ok) {
                 setMechanics(data.mechanics);
                 setStats(prev => ({ ...prev, mecanicosCerca: data.mechanics.length }));
@@ -36,11 +40,8 @@ const ClientDashboard = () => {
         } catch (error) {
             console.error("Error al cargar mecánicos cercanos:", error);
         }
-    };
+    }, []);
 
-    /**
-     * Obtiene los datos del perfil del usuario
-     */
     const loadUserProfile = async () => {
         try {
             const response = await fetch('http://localhost:5000/api/users/1');
@@ -54,9 +55,6 @@ const ClientDashboard = () => {
         }
     };
 
-    /**
-     * Obtiene el conteo real de servicios activos
-     */
     const loadActiveCount = async () => {
         try {
             const response = await fetch('http://localhost:5000/api/services/count/1');
@@ -69,11 +67,7 @@ const ClientDashboard = () => {
         }
     };
 
-    /**
-     * MECHIN-67: Funciones para manejar el modal
-     */
     const openSolicitarModal = (mech = null) => {
-        console.log("Mecánico seleccionado para el modal:", mech);
         setSelectedMechanic(mech);
         setIsModalOpen(true);
     };
@@ -87,27 +81,20 @@ const ClientDashboard = () => {
         loadUserProfile();
         loadActiveCount();
         loadNearbyMechanics();
-    }, []);
+    }, [loadNearbyMechanics]);
 
-    /**
-     * CORRECCIÓN FINAL: Envío estructurado del payload
-     */
     const handleFinalSubmit = async (datosSolicitud) => {
-        // Aseguramos el ID del mecánico desde el estado del Dashboard
         const targetMecanicoId = selectedMechanic?.mecanico_id || selectedMechanic?.id || null;
 
-        // Construcción explícita: Esto garantiza que mecanico_id exista en el JSON
         const payload = {
-            cliente_id: datosSolicitud.cliente_id || 1,
+            cliente_id: 1, // ID fijo por ahora para pruebas
             mecanico_id: targetMecanicoId,
             tipo_servicio: datosSolicitud.tipo_servicio,
             descripcion: datosSolicitud.descripcion,
             direccion_servicio: datosSolicitud.direccion_servicio,
-            latitud_servicio: datosSolicitud.latitud_servicio,
-            longitud_servicio: datosSolicitud.longitud_servicio
+            latitud_servicio: clientCoords.lat,
+            longitud_servicio: clientCoords.lng
         };
-
-        console.log("🚀 Payload corregido que SALE al backend:", payload);
 
         try {
             const response = await fetch('http://localhost:5000/api/services', {
@@ -124,7 +111,7 @@ const ClientDashboard = () => {
                     ? `¡Solicitud directa enviada a ${selectedMechanic.nombre_completo.split(' ')[0]}!` 
                     : "¡Solicitud general enviada con éxito!");
             } else {
-                alert("Error al registrar: " + (result.message || "Intente más tarde"));
+                alert("Error: " + result.message);
             }
         } catch (error) {
             console.error("Error al enviar solicitud:", error);
@@ -224,13 +211,19 @@ const ClientDashboard = () => {
                     <div className="map-row">
                         <div className="map-card">
                             <div className="map-head">Mecánicos cercanos</div>
-                            <div className="map-body" style={{ position: 'relative' }}>
+                            <div className="map-body" style={{ position: 'relative', overflow: 'hidden' }}>
                                 <div className="map-grid"></div>
-                                <div className="map-you"></div>
+                                {/* El punto azul representa a Mariana */}
+                                <div className="map-you" style={{ 
+                                    top: '50%', left: '50%', 
+                                    position: 'absolute', transform: 'translate(-50%, -50%)',
+                                    zIndex: 2
+                                }}></div>
                                 
                                 {mechanics.map((mech) => {
-                                    const visualTop = Math.abs(parseFloat(mech.latitud) % 1) * 100;
-                                    const visualLeft = Math.abs(parseFloat(mech.longitud) % 1) * 100;
+                                    // Cálculo visual para posicionar pines relativo al centro (50,50)
+                                    const visualTop = 50 + (mech.lat - clientCoords.lat) * 2000;
+                                    const visualLeft = 50 + (mech.lng - clientCoords.lng) * 2000;
 
                                     return (
                                         <div 
@@ -240,17 +233,24 @@ const ClientDashboard = () => {
                                                 top: `${visualTop}%`, 
                                                 left: `${visualLeft}%`,
                                                 position: 'absolute',
-                                                cursor: 'pointer'
+                                                cursor: 'pointer',
+                                                zIndex: 3
                                             }}
                                             onClick={() => openSolicitarModal(mech)}
                                         >
-                                            <span style={{ whiteSpace: 'nowrap' }}>
+                                            <span style={{ 
+                                                whiteSpace: 'nowrap', 
+                                                fontSize: '10px', 
+                                                background: 'rgba(0,0,0,0.6)', 
+                                                padding: '2px 5px', 
+                                                borderRadius: '4px' 
+                                            }}>
                                                 {mech.nombre_completo.split(' ')[0]} · {mech.distancia}km
                                             </span>
                                             <div style={{
                                                 width:'12px', height:'12px', borderRadius:'50%', 
                                                 background:'var(--orange2)', border:'2px solid var(--bg)',
-                                                boxShadow: '0 0 10px var(--orange2)'
+                                                boxShadow: '0 0 10px var(--orange2)', margin: '0 auto'
                                             }}></div>
                                         </div>
                                     );
@@ -259,14 +259,19 @@ const ClientDashboard = () => {
                         </div>
 
                         <div className="mecanicos-card">
-                            <div className="mc-head">Disponibles ahora</div>
+                            <div className="mc-head">Disponibles ahora (Más cercanos)</div>
                             <div className="mc-list" style={{ overflowY: 'auto', maxHeight: '300px' }}>
                                 {mechanics.length > 0 ? (
                                     mechanics.map((mech) => (
                                         <div key={mech.mecanico_id || mech.id} className="mc-item">
                                             <div className="mc-avatar">{getInitials(mech.nombre_completo)}</div>
                                             <div className="mc-info">
-                                                <div className="mc-name">{mech.nombre_completo}</div>
+                                                <div className="mc-name">
+                                                    {mech.nombre_completo} 
+                                                    <span style={{ fontSize: '10px', color: 'var(--orange2)', marginLeft: '8px' }}>
+                                                        {mech.distancia} km
+                                                    </span>
+                                                </div>
                                                 <div className="mc-spec">{mech.especialidad || 'Mecánica general'}</div>
                                             </div>
                                             <div className="mc-btn" onClick={() => openSolicitarModal(mech)}>
