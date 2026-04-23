@@ -14,8 +14,10 @@ app.use(express.json());
 app.use('/api/auth', require('./src/modules/auth/auth.routes'));
 
 // RUTA DE GEOLOCALIZACIÓN (MECHIN-69)
-// Esta es la línea que faltaba para que el 404 desaparezca
 app.use('/api/geolocation', require('./src/modules/geolocation/geolocation.routes'));
+
+// NUEVA RUTA DE SERVICIOS (MECHIN-13) - ✅ Conectada correctamente
+app.use('/api/services', require('./src/modules/services/services.routes'));
 
 // --- PRUEBA DE CONEXIÓN A LA BD ---
 app.get('/api/health', async (req, res) => {
@@ -41,6 +43,6 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`==========================================`);
   console.log(`🚀 Servidor Mechin corriendo en puerto ${PORT}`);
-  console.log(`📍 Geolocation API: http://localhost:${PORT}/api/geolocation/update`);
+  console.log(`📍 Services API: http://localhost:${PORT}/api/services`);
   console.log(`==========================================`);
 });
