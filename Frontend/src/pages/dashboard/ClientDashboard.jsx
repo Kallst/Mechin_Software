@@ -4,42 +4,58 @@ import useGeolocation from '../../hooks/useGeolocation';
 import SolicitarModal from '../../components/SolicitarModal/SolicitarModal';
 
 const ClientDashboard = () => {
-    const { handleSyncLocation, isSyncing } = useGeolocation();
+    const { isSyncing } = useGeolocation();
     
-    // Estado para controlar la visibilidad del modal
+    // Estados básicos
     const [isModalOpen, setIsModalOpen] = useState(false);
-
-    // NUEVO: Estado para el nombre del usuario
     const [userName, setUserName] = useState("Cargando...");
+    const [mechanics, setMechanics] = useState([]);
+    
+    // MECHIN-67: Estado para el mecánico que el usuario selecciona
+    const [selectedMechanic, setSelectedMechanic] = useState(null);
 
     // Estado para manejar las estadísticas dinámicas
     const [stats, setStats] = useState({
         activos: 0,
-        mecanicosCerca: 8, 
+        mecanicosCerca: 0, 
         completados: 12,
         rating: "4.8 ★"
     });
 
     /**
-     * Obtiene los datos del perfil del usuario (Nombre real)
+     * Carga los mecánicos desde el Backend
      */
-    const loadUserProfile = async () => {
+    const loadNearbyMechanics = async () => {
         try {
-            // Consultamos al endpoint de usuarios que habilitamos (ID 1)
-            const response = await fetch('http://localhost:5000/api/users/1');
+            const response = await fetch('http://localhost:5000/api/mechanics/nearby');
             const data = await response.json();
             if (data.ok) {
-                // Usamos "nombre_completo" según el script de tu base de datos
-                setUserName(data.user.nombre_completo);
+                setMechanics(data.mechanics);
+                setStats(prev => ({ ...prev, mecanicosCerca: data.mechanics.length }));
             }
         } catch (error) {
-            console.error("Error al cargar perfil:", error);
-            setUserName("Usuario"); // Fallback por si falla el servidor
+            console.error("Error al cargar mecánicos cercanos:", error);
         }
     };
 
     /**
-     * Obtiene el conteo real de servicios activos desde el Backend
+     * Obtiene los datos del perfil del usuario
+     */
+    const loadUserProfile = async () => {
+        try {
+            const response = await fetch('http://localhost:5000/api/users/1');
+            const data = await response.json();
+            if (data.ok) {
+                setUserName(data.user.nombre_completo);
+            }
+        } catch (error) {
+            console.error("Error al cargar perfil:", error);
+            setUserName("Usuario");
+        }
+    };
+
+    /**
+     * Obtiene el conteo real de servicios activos
      */
     const loadActiveCount = async () => {
         try {
@@ -54,44 +70,70 @@ const ClientDashboard = () => {
     };
 
     /**
-     * Efecto para cargar los datos apenas entre al Dashboard
+     * MECHIN-67: Funciones para manejar el modal
      */
+    const openSolicitarModal = (mech = null) => {
+        console.log("Mecánico seleccionado para el modal:", mech);
+        setSelectedMechanic(mech);
+        setIsModalOpen(true);
+    };
+
+    const closeSolicitarModal = () => {
+        setIsModalOpen(false);
+        setSelectedMechanic(null); 
+    };
+
     useEffect(() => {
-        loadUserProfile(); // Carga tu nombre real
-        loadActiveCount(); // Carga tus servicios activos
+        loadUserProfile();
+        loadActiveCount();
+        loadNearbyMechanics();
     }, []);
 
     /**
-     * Envía los datos al Backend y actualiza la interfaz
+     * CORRECCIÓN FINAL: Envío estructurado del payload
      */
     const handleFinalSubmit = async (datosSolicitud) => {
+        // Aseguramos el ID del mecánico desde el estado del Dashboard
+        const targetMecanicoId = selectedMechanic?.mecanico_id || selectedMechanic?.id || null;
+
+        // Construcción explícita: Esto garantiza que mecanico_id exista en el JSON
+        const payload = {
+            cliente_id: datosSolicitud.cliente_id || 1,
+            mecanico_id: targetMecanicoId,
+            tipo_servicio: datosSolicitud.tipo_servicio,
+            descripcion: datosSolicitud.descripcion,
+            direccion_servicio: datosSolicitud.direccion_servicio,
+            latitud_servicio: datosSolicitud.latitud_servicio,
+            longitud_servicio: datosSolicitud.longitud_servicio
+        };
+
+        console.log("🚀 Payload corregido que SALE al backend:", payload);
+
         try {
             const response = await fetch('http://localhost:5000/api/services', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(datosSolicitud),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
             });
-
             const result = await response.json();
-
+            
             if (result.ok) {
-                setIsModalOpen(false); 
+                closeSolicitarModal();
                 await loadActiveCount(); 
-                alert("¡Solicitud enviada con éxito! Ya está registrada en el sistema.");
+                alert(targetMecanicoId 
+                    ? `¡Solicitud directa enviada a ${selectedMechanic.nombre_completo.split(' ')[0]}!` 
+                    : "¡Solicitud general enviada con éxito!");
             } else {
                 alert("Error al registrar: " + (result.message || "Intente más tarde"));
             }
-
         } catch (error) {
             console.error("Error al enviar solicitud:", error);
-            alert("No se pudo conectar con el servidor. Verifica que el Backend esté encendido.");
+            alert("No se pudo conectar con el servidor.");
         }
     };
 
-    // Función auxiliar para obtener iniciales para el avatar
     const getInitials = (name) => {
+        if (!name || name === "Cargando...") return "??";
         return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
     };
 
@@ -121,8 +163,7 @@ const ClientDashboard = () => {
 
                 <div className="sb-spacer"></div>
                 <div className="sb-user">
-                    {/* Avatar dinámico con tus iniciales */}
-                    <div className="sb-avatar">{userName !== "Cargando..." ? getInitials(userName) : "..."}</div>
+                    <div className="sb-avatar">{getInitials(userName)}</div>
                     <div>
                         <div className="sb-uname">{userName}</div>
                         <div className="sb-urole">Cliente</div>
@@ -153,11 +194,10 @@ const ClientDashboard = () => {
                 <div className="content">
                     <div className="greeting">
                         <div>
-                            {/* SALUDO DINÁMICO */}
                             <div className="g-title">Hola, {userName} 👋</div>
                             <div className="g-sub">¿Necesitas un mecánico hoy? Hay {stats.mecanicosCerca} disponibles cerca de ti.</div>
                         </div>
-                        <button className="btn-solicitar" onClick={() => setIsModalOpen(true)}>
+                        <button className="btn-solicitar" onClick={() => openSolicitarModal(null)}>
                             + Solicitar servicio
                         </button>
                     </div>
@@ -167,17 +207,14 @@ const ClientDashboard = () => {
                             <div className="stat-val or">{stats.mecanicosCerca}</div>
                             <div className="stat-label">Mecánicos disponibles</div>
                         </div>
-                        
                         <div className="stat">
                             <div className="stat-val bl">{stats.activos}</div>
                             <div className="stat-label">Servicios activos</div>
                         </div>
-
                         <div className="stat">
                             <div className="stat-val ok">{stats.completados}</div>
                             <div className="stat-label">Servicios completados</div>
                         </div>
-                        
                         <div className="stat">
                             <div className="stat-val">{stats.rating}</div>
                             <div className="stat-label">Calificación</div>
@@ -187,25 +224,61 @@ const ClientDashboard = () => {
                     <div className="map-row">
                         <div className="map-card">
                             <div className="map-head">Mecánicos cercanos</div>
-                            <div className="map-body">
+                            <div className="map-body" style={{ position: 'relative' }}>
                                 <div className="map-grid"></div>
                                 <div className="map-you"></div>
-                                <div className="map-pin" style={{top:'22%', left:'28%'}}>
-                                    <span>Carlos · 0.8km</span>
-                                </div>
+                                
+                                {mechanics.map((mech) => {
+                                    const visualTop = Math.abs(parseFloat(mech.latitud) % 1) * 100;
+                                    const visualLeft = Math.abs(parseFloat(mech.longitud) % 1) * 100;
+
+                                    return (
+                                        <div 
+                                            key={mech.mecanico_id || mech.id} 
+                                            className="map-pin" 
+                                            style={{ 
+                                                top: `${visualTop}%`, 
+                                                left: `${visualLeft}%`,
+                                                position: 'absolute',
+                                                cursor: 'pointer'
+                                            }}
+                                            onClick={() => openSolicitarModal(mech)}
+                                        >
+                                            <span style={{ whiteSpace: 'nowrap' }}>
+                                                {mech.nombre_completo.split(' ')[0]} · {mech.distancia}km
+                                            </span>
+                                            <div style={{
+                                                width:'12px', height:'12px', borderRadius:'50%', 
+                                                background:'var(--orange2)', border:'2px solid var(--bg)',
+                                                boxShadow: '0 0 10px var(--orange2)'
+                                            }}></div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
+
                         <div className="mecanicos-card">
                             <div className="mc-head">Disponibles ahora</div>
-                            <div className="mc-list">
-                                <div className="mc-item">
-                                    <div className="mc-avatar">CA</div>
-                                    <div className="mc-info">
-                                        <div className="mc-name">Carlos Ramírez</div>
-                                        <div className="mc-spec">Mecánica general</div>
+                            <div className="mc-list" style={{ overflowY: 'auto', maxHeight: '300px' }}>
+                                {mechanics.length > 0 ? (
+                                    mechanics.map((mech) => (
+                                        <div key={mech.mecanico_id || mech.id} className="mc-item">
+                                            <div className="mc-avatar">{getInitials(mech.nombre_completo)}</div>
+                                            <div className="mc-info">
+                                                <div className="mc-name">{mech.nombre_completo}</div>
+                                                <div className="mc-spec">{mech.especialidad || 'Mecánica general'}</div>
+                                            </div>
+                                            <div className="mc-btn" onClick={() => openSolicitarModal(mech)}>
+                                                Solicitar
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="mc-item" style={{ fontSize: '12px', color: 'var(--muted)' }}>
+                                        No hay mecánicos disponibles.
                                     </div>
-                                    <div className="mc-btn">Solicitar</div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -214,9 +287,10 @@ const ClientDashboard = () => {
 
             <SolicitarModal 
                 isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
+                onClose={closeSolicitarModal} 
                 onSubmit={handleFinalSubmit}
                 isSyncing={isSyncing}
+                selectedMechanic={selectedMechanic} 
             />
         </div>
     );

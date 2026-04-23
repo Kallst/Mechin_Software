@@ -393,3 +393,7 @@ ON CONFLICT (nombre) DO NOTHING;
 -- ============================================================
 -- FIN DEL SCRIPT
 -- ============================================================
+
+INSERT INTO usuarios (nombre_completo, correo, telefono, contrasena_hash, latitud, longitud, esta_activo)
+VALUES ('Carlos Mecánico Test', 'carlos@test.com', '3001234567', 'hash_simulado', 5.067, -75.517, true);
+
