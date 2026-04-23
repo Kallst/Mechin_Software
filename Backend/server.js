@@ -16,6 +16,9 @@ app.use('/api/auth', require('./src/modules/auth/auth.routes'));
 // RUTA DE GEOLOCALIZACIÓN (MECHIN-69)
 app.use('/api/geolocation', require('./src/modules/geolocation/geolocation.routes'));
 
+// RUTA DE USUARIOS (Para traer el nombre real del Dashboard)
+app.use('/api/users', require('./src/modules/users/users.routes'));
+
 // NUEVA RUTA DE SERVICIOS (MECHIN-13) - ✅ Conectada correctamente
 app.use('/api/services', require('./src/modules/services/services.routes'));
 

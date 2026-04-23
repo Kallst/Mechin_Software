@@ -9,20 +9,40 @@ const ClientDashboard = () => {
     // Estado para controlar la visibilidad del modal
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // NUEVO: Estado para manejar las estadísticas dinámicas
+    // NUEVO: Estado para el nombre del usuario
+    const [userName, setUserName] = useState("Cargando...");
+
+    // Estado para manejar las estadísticas dinámicas
     const [stats, setStats] = useState({
         activos: 0,
-        mecanicosCerca: 8, // Estos pueden ser estáticos o dinámicos después
+        mecanicosCerca: 8, 
         completados: 12,
         rating: "4.8 ★"
     });
+
+    /**
+     * Obtiene los datos del perfil del usuario (Nombre real)
+     */
+    const loadUserProfile = async () => {
+        try {
+            // Consultamos al endpoint de usuarios que habilitamos (ID 1)
+            const response = await fetch('http://localhost:5000/api/users/1');
+            const data = await response.json();
+            if (data.ok) {
+                // Usamos "nombre_completo" según el script de tu base de datos
+                setUserName(data.user.nombre_completo);
+            }
+        } catch (error) {
+            console.error("Error al cargar perfil:", error);
+            setUserName("Usuario"); // Fallback por si falla el servidor
+        }
+    };
 
     /**
      * Obtiene el conteo real de servicios activos desde el Backend
      */
     const loadActiveCount = async () => {
         try {
-            // Usamos el ID 1 por defecto (Juan Pérez)
             const response = await fetch('http://localhost:5000/api/services/count/1');
             const data = await response.json();
             if (data.ok) {
@@ -37,7 +57,8 @@ const ClientDashboard = () => {
      * Efecto para cargar los datos apenas entre al Dashboard
      */
     useEffect(() => {
-        loadActiveCount();
+        loadUserProfile(); // Carga tu nombre real
+        loadActiveCount(); // Carga tus servicios activos
     }, []);
 
     /**
@@ -56,11 +77,8 @@ const ClientDashboard = () => {
             const result = await response.json();
 
             if (result.ok) {
-                setIsModalOpen(false); // Cerramos el modal
-                
-                // RECARGAR ESTADÍSTICAS: Para que el número cambie de inmediato en pantalla
+                setIsModalOpen(false); 
                 await loadActiveCount(); 
-
                 alert("¡Solicitud enviada con éxito! Ya está registrada en el sistema.");
             } else {
                 alert("Error al registrar: " + (result.message || "Intente más tarde"));
@@ -70,6 +88,11 @@ const ClientDashboard = () => {
             console.error("Error al enviar solicitud:", error);
             alert("No se pudo conectar con el servidor. Verifica que el Backend esté encendido.");
         }
+    };
+
+    // Función auxiliar para obtener iniciales para el avatar
+    const getInitials = (name) => {
+        return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
     };
 
     return (
@@ -98,9 +121,10 @@ const ClientDashboard = () => {
 
                 <div className="sb-spacer"></div>
                 <div className="sb-user">
-                    <div className="sb-avatar">JU</div>
+                    {/* Avatar dinámico con tus iniciales */}
+                    <div className="sb-avatar">{userName !== "Cargando..." ? getInitials(userName) : "..."}</div>
                     <div>
-                        <div className="sb-uname">Juan Pérez</div>
+                        <div className="sb-uname">{userName}</div>
                         <div className="sb-urole">Cliente</div>
                     </div>
                 </div>
@@ -129,7 +153,8 @@ const ClientDashboard = () => {
                 <div className="content">
                     <div className="greeting">
                         <div>
-                            <div className="g-title">Hola, Juan 👋</div>
+                            {/* SALUDO DINÁMICO */}
+                            <div className="g-title">Hola, {userName} 👋</div>
                             <div className="g-sub">¿Necesitas un mecánico hoy? Hay {stats.mecanicosCerca} disponibles cerca de ti.</div>
                         </div>
                         <button className="btn-solicitar" onClick={() => setIsModalOpen(true)}>
@@ -143,7 +168,6 @@ const ClientDashboard = () => {
                             <div className="stat-label">Mecánicos disponibles</div>
                         </div>
                         
-                        {/* ESTADÍSTICA DINÁMICA CONECTADA AL BACKEND */}
                         <div className="stat">
                             <div className="stat-val bl">{stats.activos}</div>
                             <div className="stat-label">Servicios activos</div>
@@ -188,7 +212,6 @@ const ClientDashboard = () => {
                 </div>
             </div>
 
-            {/* MODAL INTEGRADO Y CONECTADO AL BACKEND */}
             <SolicitarModal 
                 isOpen={isModalOpen} 
                 onClose={() => setIsModalOpen(false)} 
