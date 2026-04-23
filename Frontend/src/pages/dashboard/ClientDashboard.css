@@ -1,0 +1,113 @@
+/* ============================================================
+   ESTILOS PARA EL DASHBOARD DEL CLIENTE - MECHIN-69
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700;800&family=Inter:wght@300;400;500&display=swap');
+
+:root {
+  /* Paleta de colores Dark Mechin */
+  --bg-color: #080c14;
+  --surface-1: #0d1220;
+  --surface-2: #111829;
+  --surface-3: #162035;
+  --border-color: #1e2d45;
+  
+  /* Acentos */
+  --orange-main: #e85d20;
+  --orange-hover: #ff6e2d;
+  --text-main: #cdd8e8;
+  --text-muted: #6b85a0;
+  
+  /* Fuentes */
+  --font-header: 'Exo 2', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+/* Reset y Base */
+.shell {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  font-family: var(--font-body);
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.content {
+  padding: 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Cabecera de bienvenida */
+.greeting {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--surface-1);
+  padding: 30px;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 30px;
+}
+
+.g-title {
+  font-family: var(--font-header);
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.g-sub {
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+/* Botón de Solicitud (El protagonista de MECHIN-69) */
+.btn-solicitar {
+  background: linear-gradient(135deg, var(--orange-main), var(--orange-hover));
+  color: white;
+  border: none;
+  padding: 14px 28px;
+  border-radius: 10px;
+  font-family: var(--font-header);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(232, 93, 32, 0.2);
+}
+
+.btn-solicitar:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(232, 93, 32, 0.4);
+}
+
+.btn-solicitar:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-solicitar:disabled {
+  background: var(--surface-3);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.7;
+  box-shadow: none;
+}
+
+/* Animación simple para el estado de carga */
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+.btn-solicitar:disabled {
+  animation: pulse 1.5s infinite ease-in-out;
+}
