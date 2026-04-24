@@ -3,6 +3,34 @@ import './ClientDashboard.css';
 import useGeolocation from '../../hooks/useGeolocation';
 import SolicitarModal from '../../components/SolicitarModal/SolicitarModal';
 
+// --- NUEVAS IMPORTACIONES PARA EL MAPA REAL ---
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix para iconos de Leaflet en React
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Iconos personalizados con Emojis
+const carIcon = new L.DivIcon({
+    html: `<div style="font-size: 24px; filter: drop-shadow(0 0 5px rgba(255,110,45,0.8)); transition: all 6s linear;">🚗</div>`,
+    className: 'custom-leaflet-icon-car',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15]
+});
+
+const homeIcon = new L.DivIcon({
+    html: `<div style="font-size: 24px; filter: drop-shadow(0 0 8px rgba(255,255,255,0.5));">🏠</div>`,
+    className: 'custom-leaflet-icon-home',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15]
+});
+
 const ClientDashboard = () => {
     const { isSyncing } = useGeolocation();
     
@@ -17,12 +45,13 @@ const ClientDashboard = () => {
     const [notifications, setNotifications] = useState([]);
     const [showNotif, setShowNotif] = useState(false);
     
-    const clienteId = 1; // ID fijo para desarrollo, luego usar sesión
+    const clienteId = 1; // ID fijo para desarrollo
 
-    // NUEVO: Estado para el servicio activo (Seguimiento)
+    // Estado para el servicio activo
     const [activeService, setActiveService] = useState(null);
 
-    const clientCoords = { lat: 5.067, lng: -75.517 };
+    // Coordenadas fijas de Manizales para el cliente
+    const [clientCoords] = useState({ lat: 5.067, lng: -75.517 });
 
     const [stats, setStats] = useState({
         activos: 0,
@@ -44,7 +73,7 @@ const ClientDashboard = () => {
         } catch (error) { console.error("Error mecánicos:", error); }
     }, [clientCoords.lat, clientCoords.lng]);
 
-    // NUEVO: Verificar si hay un servicio en curso
+    // Verificar servicio activo
     const checkActiveService = useCallback(async () => {
         try {
             const response = await fetch(`http://localhost:5000/api/services/active/${clienteId}`);
@@ -78,7 +107,6 @@ const ClientDashboard = () => {
         } catch (error) { console.error("Error stats:", error); }
     };
 
-    // --- LÓGICA DE NOTIFICACIONES ---
     const fetchNotifications = async () => {
         try {
             const res = await fetch(`http://localhost:5000/api/notifications/${clienteId}`);
@@ -103,7 +131,6 @@ const ClientDashboard = () => {
         setApiError(''); 
     };
 
-    // NUEVO: Cancelar servicio
     const handleCancelService = async (serviceId) => {
         if (!window.confirm("¿Deseas cancelar el servicio?")) return;
         try {
@@ -116,7 +143,6 @@ const ClientDashboard = () => {
         } catch (error) { console.error("Error al cancelar:", error); }
     };
 
-    // Polling y carga inicial
     useEffect(() => {
         loadUserProfile();
         loadActiveCount();
@@ -124,11 +150,14 @@ const ClientDashboard = () => {
         checkActiveService();
         fetchNotifications();
         
-        const serviceInterval = setInterval(checkActiveService, 20000);
-        const notifInterval = setInterval(fetchNotifications, 30000);
+        // Intervalos de actualización ajustados al ritmo del servidor (6s)
+        const serviceInterval = setInterval(checkActiveService, 10000);
+        const mechanicInterval = setInterval(loadNearbyMechanics, 6000);
+        const notifInterval = setInterval(fetchNotifications, 20000);
 
         return () => {
             clearInterval(serviceInterval);
+            clearInterval(mechanicInterval);
             clearInterval(notifInterval);
         };
     }, [loadNearbyMechanics, checkActiveService]);
@@ -206,7 +235,6 @@ const ClientDashboard = () => {
                         />
                     </div>
 
-                    {/* NUEVO: PANEL DE NOTIFICACIONES */}
                     <div className="notif-container">
                         <button className="notif-bell" onClick={() => setShowNotif(!showNotif)}>
                             🔔
@@ -283,42 +311,47 @@ const ClientDashboard = () => {
                     </div>
 
                     <div className="map-row">
-                        <div className="map-card" style={{ flex: 2, position: 'relative' }}>
+                        <div className="map-card" style={{ flex: 2, position: 'relative', overflow: 'hidden' }}>
                             <div className="map-head">Mapa de servicio en tiempo real</div>
-                            <div className="map-body" style={{ position: 'relative', overflow: 'hidden', height: '400px' }}>
-                                <div className="map-grid"></div>
-                                
-                                <div className="map-you" style={{ top: '50%', left: '50%', position: 'absolute', transform: 'translate(-50%, -50%)', zIndex: 10 }}>
-                                    <div className="user-marker-rappi">
-                                        <div className="pulse"></div>
-                                        <div className="icon">🏠</div>
-                                    </div>
-                                    {/* NUEVO: RADAR DE BÚSQUEDA */}
-                                    {activeService && activeService.estado === 'pendiente' && (
-                                        <div className="radar-container">
-                                            <div className="radar-ring"></div>
-                                        </div>
-                                    )}
-                                </div>
-                                
-                                {filteredMechanics.map((mech) => (
-                                    <div 
-                                        key={mech.id} 
-                                        className="map-pin-rappi" 
-                                        style={{ 
-                                            top: `${50 + (mech.lat - clientCoords.lat) * 2000}%`, 
-                                            left: `${50 + (mech.lng - clientCoords.lng) * 2000}%`, 
-                                            position: 'absolute', cursor: 'pointer', zIndex: 5 
-                                        }}
-                                        onClick={() => handleSelectMechanic(mech)}
-                                    >
-                                        <div className="car-icon">🚗</div>
-                                        <span className="car-label">{mech.nombre_completo.split(' ')[0]}</span>
-                                    </div>
-                                ))}
+                            
+                            <div className="map-body" style={{ height: '400px', width: '100%', position: 'relative' }}>
+                                <MapContainer 
+                                    center={[clientCoords.lat, clientCoords.lng]} 
+                                    zoom={14} 
+                                    style={{ height: '100%', width: '100%' }}
+                                    zoomControl={false}
+                                    scrollWheelZoom={true} // Permite moverte sin que te regrese al centro
+                                >
+                                    <TileLayer
+                                        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                                        attribution='&copy; OpenStreetMap'
+                                    />
+
+                                    {/* Tu Casa (Ancla estática) */}
+                                    <Marker position={[clientCoords.lat, clientCoords.lng]} icon={homeIcon}>
+                                        <Popup>Tu ubicación</Popup>
+                                    </Marker>
+
+                                    {/* Carritos de Mecánicos (Se mueven por todo Manizales) */}
+                                    {filteredMechanics.map((mech) => (
+                                        <Marker 
+                                            key={mech.id} 
+                                            position={[mech.lat, mech.lng]} 
+                                            icon={carIcon}
+                                            eventHandlers={{
+                                                click: () => handleSelectMechanic(mech),
+                                            }}
+                                        >
+                                            <Popup>
+                                                <strong>{mech.nombre_completo}</strong><br />
+                                                {mech.especialidad}
+                                            </Popup>
+                                        </Marker>
+                                    ))}
+                                </MapContainer>
 
                                 {showDetail && selectedMechanic && (
-                                    <div className="mech-detail-panel">
+                                    <div className="mech-detail-panel" style={{ zIndex: 1000 }}>
                                         <button className="close-panel" onClick={() => setShowDetail(false)}>×</button>
                                         <div className="detail-header">
                                             <div className="detail-avatar">{selectedMechanic.nombre_completo[0]}</div>
