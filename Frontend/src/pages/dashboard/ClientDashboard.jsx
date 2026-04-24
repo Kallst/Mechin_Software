@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ClientDashboard.css';
 import useGeolocation from '../../hooks/useGeolocation';
 import SolicitarModal from '../../components/SolicitarModal/SolicitarModal';
 
 // --- NUEVAS IMPORTACIONES PARA EL MAPA REAL ---
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -31,10 +31,22 @@ const homeIcon = new L.DivIcon({
     iconAnchor: [15, 15]
 });
 
+// --- COMPONENTE DE BOTONES PERSONALIZADOS ---
+const MapControls = ({ centerUser }) => {
+    const map = useMap();
+    return (
+        <div className="map-custom-controls">
+            <button onClick={() => map.zoomIn()} title="Acercar">+</button>
+            <button onClick={() => map.zoomOut()} title="Alejar">−</button>
+            <button onClick={centerUser} title="Mi ubicación" className="btn-locate">📍</button>
+        </div>
+    );
+};
+
 const ClientDashboard = () => {
     const { isSyncing } = useGeolocation();
+    const mapRef = useRef(null); // Referencia para controlar el mapa
     
-    // Estados básicos
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [showDetail, setShowDetail] = useState(false);
     const [userName, setUserName] = useState("Cargando...");
@@ -45,12 +57,9 @@ const ClientDashboard = () => {
     const [notifications, setNotifications] = useState([]);
     const [showNotif, setShowNotif] = useState(false);
     
-    const clienteId = 1; // ID fijo para desarrollo
+    const clienteId = 1; 
 
-    // Estado para el servicio activo
     const [activeService, setActiveService] = useState(null);
-
-    // Coordenadas fijas de Manizales para el cliente
     const [clientCoords] = useState({ lat: 5.067, lng: -75.517 });
 
     const [stats, setStats] = useState({
@@ -60,7 +69,6 @@ const ClientDashboard = () => {
         rating: "4.8 ★"
     });
 
-    // Cargar mecánicos cercanos
     const loadNearbyMechanics = useCallback(async () => {
         try {
             const url = `http://localhost:5000/api/mechanics/nearby?lat=${clientCoords.lat}&lng=${clientCoords.lng}`;
@@ -73,7 +81,6 @@ const ClientDashboard = () => {
         } catch (error) { console.error("Error mecánicos:", error); }
     }, [clientCoords.lat, clientCoords.lng]);
 
-    // Verificar servicio activo
     const checkActiveService = useCallback(async () => {
         try {
             const response = await fetch(`http://localhost:5000/api/services/active/${clienteId}`);
@@ -150,7 +157,6 @@ const ClientDashboard = () => {
         checkActiveService();
         fetchNotifications();
         
-        // Intervalos de actualización ajustados al ritmo del servidor (6s)
         const serviceInterval = setInterval(checkActiveService, 10000);
         const mechanicInterval = setInterval(loadNearbyMechanics, 6000);
         const notifInterval = setInterval(fetchNotifications, 20000);
@@ -320,19 +326,21 @@ const ClientDashboard = () => {
                                     zoom={14} 
                                     style={{ height: '100%', width: '100%' }}
                                     zoomControl={false}
-                                    scrollWheelZoom={true} // Permite moverte sin que te regrese al centro
+                                    scrollWheelZoom={true}
+                                    ref={mapRef}
                                 >
                                     <TileLayer
                                         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                                         attribution='&copy; OpenStreetMap'
                                     />
 
-                                    {/* Tu Casa (Ancla estática) */}
+                                    {/* CONTROLES PERSONALIZADOS */}
+                                    <MapControls centerUser={() => mapRef.current?.setView([clientCoords.lat, clientCoords.lng], 15)} />
+
                                     <Marker position={[clientCoords.lat, clientCoords.lng]} icon={homeIcon}>
                                         <Popup>Tu ubicación</Popup>
                                     </Marker>
 
-                                    {/* Carritos de Mecánicos (Se mueven por todo Manizales) */}
                                     {filteredMechanics.map((mech) => (
                                         <Marker 
                                             key={mech.id} 
@@ -352,7 +360,7 @@ const ClientDashboard = () => {
 
                                 {showDetail && selectedMechanic && (
                                     <div className="mech-detail-panel" style={{ zIndex: 1000 }}>
-                                        <button className="close-panel" onClick={() => setShowDetail(false)}>×</button>
+                                        <button className="close-panel" onClick={() => setShowDetail(false)}>✕</button>
                                         <div className="detail-header">
                                             <div className="detail-avatar">{selectedMechanic.nombre_completo[0]}</div>
                                             <div className="detail-info">
