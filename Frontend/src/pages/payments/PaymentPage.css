@@ -1,0 +1,190 @@
+/* src/pages/payments/PaymentPage.css */
+
+.payment-shell {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: var(--bg, #080c14);
+    font-family: var(--ff-b, 'Inter', sans-serif);
+    color: var(--text, #cdd8e8);
+    padding: 20px;
+}
+
+.payment-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    background: var(--s1, #0d1220);
+    border: 1px solid var(--border, #1e2d45);
+    border-radius: 16px;
+    max-width: 900px;
+    width: 100%;
+    padding: 32px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.payment-header {
+    grid-column: span 2;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.payment-header h1 {
+    font-family: var(--ff-h, 'Exo 2', sans-serif);
+    font-size: 24px;
+    margin: 0;
+    color: #fff;
+}
+
+.btn-back {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted2);
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-back:hover {
+    background: var(--s2);
+    color: #fff;
+}
+
+/* Resumen del Servicio */
+.summary-section {
+    background: var(--s2, #111829);
+    padding: 24px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+
+.summary-title {
+    font-size: 14px;
+    color: var(--muted, #8fa8c0);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 16px;
+}
+
+.summary-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+
+.summary-item.total {
+    border-top: 1px dashed var(--border);
+    padding-top: 16px;
+    margin-top: 16px;
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--orange2, #ff6e2d);
+}
+
+/* Métodos de Pago */
+.methods-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.method-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background: var(--s2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.method-card:hover {
+    border-color: var(--muted2);
+}
+
+.method-card.selected {
+    border-color: var(--orange2);
+    background: rgba(255, 110, 45, 0.05);
+}
+
+.method-icon {
+    font-size: 24px;
+}
+
+.method-info h4 {
+    margin: 0 0 4px 0;
+    font-size: 15px;
+    color: #fff;
+}
+
+.method-info p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* Botón de Pagar */
+.btn-pay {
+    margin-top: auto;
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(90deg, var(--orange, #e85d20), var(--orange2, #ff6e2d));
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-family: var(--ff-h);
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.btn-pay:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(255, 110, 45, 0.4);
+}
+
+.btn-pay:disabled {
+    background: var(--s2);
+    color: var(--muted);
+    cursor: not-allowed;
+    border: 1px solid var(--border);
+}
+
+/* Mensajes de Error y Éxito */
+.pay-error {
+    color: #f85149;
+    background: rgba(248, 81, 73, 0.1);
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 16px;
+    border: 1px solid #f85149;
+}
+
+.pay-success {
+    text-align: center;
+    grid-column: span 2;
+    padding: 40px;
+}
+
+.pay-success h2 {
+    color: var(--ok, #1d9e75);
+    font-size: 28px;
+    margin-bottom: 12px;
+}
+
+@media (max-width: 768px) {
+    .payment-container {
+        grid-template-columns: 1fr;
+    }
+}
