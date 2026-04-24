@@ -1,8 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const http = require('http'); // <--- NUEVO: Para crear el servidor HTTP
-const { Server } = require('socket.io'); // <--- NUEVO: Clase de Socket.io
+const http = require('http'); 
+const { Server } = require('socket.io'); 
 const db = require('./src/config/db');
 
 // Importación de rutas
@@ -12,14 +12,15 @@ const usersRoutes = require('./src/modules/users/users.routes');
 const servicesRoutes = require('./src/modules/services/services.routes');
 const mechanicRoutes = require('./src/modules/mechanics/mechanics.routes');
 const notificationRoutes = require('./src/modules/notifications/notifications.routes');
+const paymentsRoutes = require('./src/modules/payments/payments.routes'); // <--- NUEVO: Rutas de pagos
 
 const app = express();
 
 // --- CONFIGURACIÓN DE SERVIDOR Y SOCKETS ---
-const server = http.createServer(app); // Envolvemos app con http
+const server = http.createServer(app); 
 const io = new Server(server, {
     cors: {
-        origin: "http://localhost:3000", // Permite que tu React se conecte
+        origin: "http://localhost:5173", // Permite que tu React se conecte
         methods: ["GET", "POST"]
     }
 });
@@ -35,6 +36,7 @@ app.use('/api/users', usersRoutes);
 app.use('/api/services', servicesRoutes);
 app.use('/api/mechanics', mechanicRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/payments', paymentsRoutes); // <--- NUEVO: Conexión de pagos
 
 // --- LÓGICA DE CHAT (SOCKETS) ---
 io.on('connection', (socket) => {
@@ -48,7 +50,6 @@ io.on('connection', (socket) => {
 
     // Recibir y retransmitir mensajes
     socket.on('send_message', (data) => {
-        // data: { serviceId, senderId, senderName, text, time }
         console.log('📩 Nuevo mensaje:', data.text);
         io.to(`room_${data.serviceId}`).emit('receive_message', data);
     });
@@ -58,7 +59,7 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- SIMULADOR DE MOVIMIENTO DINÁMICO (Se mantiene igual) ---
+// --- SIMULADOR DE MOVIMIENTO DINÁMICO ---
 let step = 0;
 setInterval(async () => {
     step += 0.2; 
@@ -98,7 +99,6 @@ app.get('/api/health', async (req, res) => {
 // --- LANZAMIENTO DEL SERVIDOR ---
 const PORT = process.env.PORT || 5000;
 
-// IMPORTANTE: Ahora escuchamos con 'server', no con 'app'
 server.listen(PORT, () => {
     console.log(`==========================================`);
     console.log(`🚀 Servidor Mechin (Sockets OK) puerto ${PORT}`);

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ClientDashboard.css';
 import useGeolocation from '../../hooks/useGeolocation';
 import SolicitarModal from '../../components/SolicitarModal/SolicitarModal';
-import ChatWindow from '../../components/ChatWindow/ChatWindow'; // <--- IMPORTACIÓN DEL CHAT
+import ChatWindow from '../../components/ChatWindow/ChatWindow';
 
 // --- NUEVAS IMPORTACIONES PARA EL MAPA REAL ---
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
@@ -57,11 +57,11 @@ const ClientDashboard = () => {
     const [apiError, setApiError] = useState('');
     const [notifications, setNotifications] = useState([]);
     const [showNotif, setShowNotif] = useState(false);
-
-    // --- NUEVOS ESTADOS PARA CHAT ---
     const [showChat, setShowChat] = useState(false);
     
-    const clienteId = 1; 
+    // Extraer el ID real si existe en localStorage, de lo contrario fallback temporal a 1
+    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const clienteId = storedUser.id || 1; 
 
     const [activeService, setActiveService] = useState(null);
     const [clientCoords] = useState({ lat: 5.067, lng: -75.517 });
@@ -73,10 +73,19 @@ const ClientDashboard = () => {
         rating: "4.8 ★"
     });
 
+    // --- HELPER PARA AUTORIZACIÓN ---
+    const getAuthHeaders = () => {
+        const token = localStorage.getItem('token');
+        return {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        };
+    };
+
     const loadNearbyMechanics = useCallback(async () => {
         try {
             const url = `http://localhost:5000/api/mechanics/nearby?lat=${clientCoords.lat}&lng=${clientCoords.lng}`;
-            const response = await fetch(url);
+            const response = await fetch(url, { headers: getAuthHeaders() });
             const data = await response.json();
             if (data.ok) {
                 setMechanics(data.mechanics);
@@ -87,16 +96,19 @@ const ClientDashboard = () => {
 
     const checkActiveService = useCallback(async () => {
         try {
-            const response = await fetch(`http://localhost:5000/api/services/active/${clienteId}`);
+            // CORRECCIÓN: Quitamos el /${clienteId} y agregamos headers
+            const response = await fetch(`http://localhost:5000/api/services/active`, {
+                headers: getAuthHeaders()
+            });
             const data = await response.json();
             if (data.ok && data.service) {
                 setActiveService(data.service);
             } else {
                 setActiveService(null);
-                setShowChat(false); // Cerrar chat si no hay servicio
+                setShowChat(false);
             }
         } catch (error) { console.error("Error checking active service:", error); }
-    }, [clienteId]);
+    }, []);
 
     const filteredMechanics = mechanics.filter(mech => 
         mech.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -105,15 +117,20 @@ const ClientDashboard = () => {
 
     const loadUserProfile = async () => {
         try {
-            const response = await fetch(`http://localhost:5000/api/users/${clienteId}`);
+            const response = await fetch(`http://localhost:5000/api/users/${clienteId}`, {
+                headers: getAuthHeaders()
+            });
             const data = await response.json();
             if (data.ok) setUserName(data.user.nombre_completo);
-        } catch (error) { setUserName("Mariana Barbosa"); }
+        } catch (error) { setUserName(storedUser.nombre_completo || "Usuario"); }
     };
 
     const loadActiveCount = async () => {
         try {
-            const response = await fetch(`http://localhost:5000/api/services/count/${clienteId}`);
+            // CORRECCIÓN: Quitamos el /${clienteId} y agregamos headers
+            const response = await fetch(`http://localhost:5000/api/services/count`, {
+                headers: getAuthHeaders()
+            });
             const data = await response.json();
             if (data.ok) setStats(prev => ({ ...prev, activos: data.count }));
         } catch (error) { console.error("Error stats:", error); }
@@ -121,7 +138,9 @@ const ClientDashboard = () => {
 
     const fetchNotifications = async () => {
         try {
-            const res = await fetch(`http://localhost:5000/api/notifications/${clienteId}`);
+            const res = await fetch(`http://localhost:5000/api/notifications/${clienteId}`, {
+                headers: getAuthHeaders()
+            });
             const data = await res.json();
             if (data.ok) setNotifications(data.notifications);
         } catch (err) { console.error("Error notis:", err); }
@@ -146,7 +165,10 @@ const ClientDashboard = () => {
     const handleCancelService = async (serviceId) => {
         if (!window.confirm("¿Deseas cancelar el servicio?")) return;
         try {
-            const response = await fetch(`http://localhost:5000/api/services/cancel/${serviceId}`, { method: 'PUT' });
+            const response = await fetch(`http://localhost:5000/api/services/cancel/${serviceId}`, { 
+                method: 'PUT',
+                headers: getAuthHeaders() 
+            });
             const result = await response.json();
             if (result.ok) {
                 setActiveService(null);
@@ -178,8 +200,8 @@ const ClientDashboard = () => {
         setApiError(''); 
         const targetMecanicoId = selectedMechanic?.mecanico_id || selectedMechanic?.id || null;
 
+        // CORRECCIÓN: El cliente_id ya no se envía
         const payload = {
-            cliente_id: clienteId, 
             mecanico_id: targetMecanicoId,
             tipo_servicio: datosSolicitud.tipo_servicio,
             descripcion: datosSolicitud.descripcion,
@@ -191,7 +213,7 @@ const ClientDashboard = () => {
         try {
             const response = await fetch('http://localhost:5000/api/services', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getAuthHeaders(),
                 body: JSON.stringify(payload),
             });
             const result = await response.json();
@@ -206,7 +228,7 @@ const ClientDashboard = () => {
     };
 
     const getInitials = (name) => {
-        if (!name || name === "Cargando...") return "MB";
+        if (!name || name === "Cargando...") return "Us";
         return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
     };
 
@@ -287,7 +309,6 @@ const ClientDashboard = () => {
                                     <span>{activeService.tipo_servicio} • En Manizales</span>
                                 </div>
                                 <div className="as-actions">
-                                    {/* BOTÓN DE CHAT ACTIVADO */}
                                     <button className="btn-chat-icon" onClick={() => setShowChat(!showChat)}>💬</button>
                                     <button className="btn-cancel-icon" onClick={() => handleCancelService(activeService.id)}>×</button>
                                 </div>
@@ -413,7 +434,6 @@ const ClientDashboard = () => {
                 externalError={apiError} 
             />
 
-            {/* RENDERIZADO DEL CHAT SI ESTÁ ACTIVO */}
             {showChat && activeService && (
                 <ChatWindow 
                     serviceId={activeService.id} 
