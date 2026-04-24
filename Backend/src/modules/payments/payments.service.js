@@ -12,7 +12,7 @@ const processPayment = async (clienteId, servicioId, monto, metodoPago) => {
     // 2. Actualizar el estado del servicio a 'pagado'
     await db.query("UPDATE servicios SET estado = 'pagado' WHERE id = $1", [servicioId]);
 
-    // 3. Registrar el cambio en la tabla de trazabilidad de estados
+    // 3. Registrar el cambio en la tabla de trazabilidad de estado
     await db.query(
         `INSERT INTO estados_servicio (servicio_id, usuario_id, estado_anterior, estado_nuevo, observacion)
          VALUES ($1, $2, 'finalizado', 'pagado', 'Pago procesado exitosamente por el cliente')`,
