@@ -13,8 +13,12 @@ const ClientDashboard = () => {
     const [mechanics, setMechanics] = useState([]);
     const [searchTerm, setSearchTerm] = useState(""); 
     const [selectedMechanic, setSelectedMechanic] = useState(null);
-    const [apiError, setApiError] = useState(''); 
+    const [apiError, setApiError] = useState('');
+    const [notifications, setNotifications] = useState([]);
+    const [showNotif, setShowNotif] = useState(false);
     
+    const clienteId = 1; // ID fijo para desarrollo, luego usar sesión
+
     // NUEVO: Estado para el servicio activo (Seguimiento)
     const [activeService, setActiveService] = useState(null);
 
@@ -43,7 +47,7 @@ const ClientDashboard = () => {
     // NUEVO: Verificar si hay un servicio en curso
     const checkActiveService = useCallback(async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/services/active/1'); // Ajustar ID según sesión
+            const response = await fetch(`http://localhost:5000/api/services/active/${clienteId}`);
             const data = await response.json();
             if (data.ok && data.service) {
                 setActiveService(data.service);
@@ -51,7 +55,7 @@ const ClientDashboard = () => {
                 setActiveService(null);
             }
         } catch (error) { console.error("Error checking active service:", error); }
-    }, []);
+    }, [clienteId]);
 
     const filteredMechanics = mechanics.filter(mech => 
         mech.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -60,7 +64,7 @@ const ClientDashboard = () => {
 
     const loadUserProfile = async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/users/1');
+            const response = await fetch(`http://localhost:5000/api/users/${clienteId}`);
             const data = await response.json();
             if (data.ok) setUserName(data.user.nombre_completo);
         } catch (error) { setUserName("Mariana Barbosa"); }
@@ -68,13 +72,21 @@ const ClientDashboard = () => {
 
     const loadActiveCount = async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/services/count/1');
+            const response = await fetch(`http://localhost:5000/api/services/count/${clienteId}`);
             const data = await response.json();
             if (data.ok) setStats(prev => ({ ...prev, activos: data.count }));
         } catch (error) { console.error("Error stats:", error); }
     };
 
-    // --- LÓGICA DE NAVEGACIÓN ---
+    // --- LÓGICA DE NOTIFICACIONES ---
+    const fetchNotifications = async () => {
+        try {
+            const res = await fetch(`http://localhost:5000/api/notifications/${clienteId}`);
+            const data = await res.json();
+            if (data.ok) setNotifications(data.notifications);
+        } catch (err) { console.error("Error notis:", err); }
+    };
+
     const handleSelectMechanic = (mech) => {
         setSelectedMechanic(mech);
         setShowDetail(true);
@@ -104,15 +116,21 @@ const ClientDashboard = () => {
         } catch (error) { console.error("Error al cancelar:", error); }
     };
 
+    // Polling y carga inicial
     useEffect(() => {
         loadUserProfile();
         loadActiveCount();
         loadNearbyMechanics();
         checkActiveService();
+        fetchNotifications();
         
-        // Polling para actualizar estado del servicio cada 20 segundos
-        const interval = setInterval(checkActiveService, 20000);
-        return () => clearInterval(interval);
+        const serviceInterval = setInterval(checkActiveService, 20000);
+        const notifInterval = setInterval(fetchNotifications, 30000);
+
+        return () => {
+            clearInterval(serviceInterval);
+            clearInterval(notifInterval);
+        };
     }, [loadNearbyMechanics, checkActiveService]);
 
     const handleFinalSubmit = async (datosSolicitud) => {
@@ -120,7 +138,7 @@ const ClientDashboard = () => {
         const targetMecanicoId = selectedMechanic?.mecanico_id || selectedMechanic?.id || null;
 
         const payload = {
-            cliente_id: 1, 
+            cliente_id: clienteId, 
             mecanico_id: targetMecanicoId,
             tipo_servicio: datosSolicitud.tipo_servicio,
             descripcion: datosSolicitud.descripcion,
@@ -139,7 +157,7 @@ const ClientDashboard = () => {
             if (result.ok) {
                 closeSolicitarModal();
                 await loadActiveCount(); 
-                await checkActiveService(); // Cargar la tarjeta de seguimiento inmediatamente
+                await checkActiveService();
             } else {
                 setApiError(result.message || "No se pudo procesar la solicitud.");
             }
@@ -187,10 +205,36 @@ const ClientDashboard = () => {
                             style={{ background: 'transparent', border: 'none', color: 'white', width: '100%', outline: 'none' }}
                         />
                     </div>
+
+                    {/* NUEVO: PANEL DE NOTIFICACIONES */}
+                    <div className="notif-container">
+                        <button className="notif-bell" onClick={() => setShowNotif(!showNotif)}>
+                            🔔
+                            {notifications.filter(n => !n.leida).length > 0 && (
+                                <span className="notif-badge">{notifications.filter(n => !n.leida).length}</span>
+                            )}
+                        </button>
+                        {showNotif && (
+                            <div className="notif-dropdown">
+                                <div className="notif-header">Notificaciones</div>
+                                <div className="notif-list">
+                                    {notifications.length === 0 ? (
+                                        <div className="notif-empty">Sin novedades</div>
+                                    ) : (
+                                        notifications.map(n => (
+                                            <div key={n.id} className={`notif-item ${n.leida ? 'read' : 'unread'}`}>
+                                                <p>{n.mensaje}</p>
+                                                <span>{new Date(n.creado_en).toLocaleTimeString()}</span>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div className="content">
-                    {/* NUEVO: TARJETA FLOTANTE DE SERVICIO ACTIVO */}
                     {activeService && (
                         <div className="active-service-floating-card">
                             <div className="as-status-badge">
@@ -249,6 +293,12 @@ const ClientDashboard = () => {
                                         <div className="pulse"></div>
                                         <div className="icon">🏠</div>
                                     </div>
+                                    {/* NUEVO: RADAR DE BÚSQUEDA */}
+                                    {activeService && activeService.estado === 'pendiente' && (
+                                        <div className="radar-container">
+                                            <div className="radar-ring"></div>
+                                        </div>
+                                    )}
                                 </div>
                                 
                                 {filteredMechanics.map((mech) => (

@@ -8,6 +8,8 @@ const geolocationRoutes = require('./src/modules/geolocation/geolocation.routes'
 const usersRoutes = require('./src/modules/users/users.routes');
 const servicesRoutes = require('./src/modules/services/services.routes');
 const mechanicRoutes = require('./src/modules/mechanics/mechanics.routes');
+// NUEVO: Importación de la ruta de notificaciones
+const notificationRoutes = require('./src/modules/notifications/notifications.routes');
 
 const app = express();
 
@@ -20,7 +22,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/geolocation', geolocationRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/services', servicesRoutes);
-app.use('/api/mechanics', mechanicRoutes); // <--- Registro de la ruta de mecánicos
+app.use('/api/mechanics', mechanicRoutes);
+// NUEVO: Registro de la ruta de notificaciones
+app.use('/api/notifications', notificationRoutes);
 
 // --- PRUEBA DE CONEXIÓN A LA BD ---
 app.get('/api/health', async (req, res) => {
@@ -46,5 +50,6 @@ app.listen(PORT, () => {
     console.log(`==========================================`);
     console.log(`🚀 Servidor Mechin corriendo en puerto ${PORT}`);
     console.log(`📍 Mechanics API: http://localhost:${PORT}/api/mechanics/nearby`);
+    console.log(`🔔 Notifications API: http://localhost:${PORT}/api/notifications`);
     console.log(`==========================================`);
 });

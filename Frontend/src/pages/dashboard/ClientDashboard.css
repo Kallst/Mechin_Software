@@ -273,3 +273,74 @@
 .progress-fill.pendiente { width: 20%; background: #ff6e2d; }
 .progress-fill.en_camino { width: 60%; background: #2d9bff; }
 .progress-fill.finalizado { width: 100%; background: #2dfa70; }
+
+
+/* Contenedor de la campana */
+.notif-container {
+    position: relative;
+    margin-left: 15px;
+}
+
+.notif-bell {
+    background: #1e2530;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    position: relative;
+}
+
+/* Punto rojo de notificaciones nuevas */
+.notif-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #ff4d4d;
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 50%;
+    font-weight: bold;
+}
+
+/* El panel desplegable */
+.notif-dropdown {
+    position: absolute;
+    right: 0;
+    top: 50px;
+    width: 300px;
+    background: #1e2530;
+    border: 1px solid #333;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    z-index: 1000;
+}
+
+.notif-header {
+    padding: 12px;
+    border-bottom: 1px solid #333;
+    font-weight: bold;
+    color: #ff6e2d;
+}
+
+.notif-item {
+    padding: 12px;
+    border-bottom: 1px solid #2a313c;
+    transition: 0.3s;
+}
+
+.notif-item.unread {
+    background: rgba(255, 110, 45, 0.05);
+}
+
+.notif-item p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #e0e0e0;
+}
+
+.notif-item span {
+    font-size: 0.75rem;
+    color: #888;
+}
