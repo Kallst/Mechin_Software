@@ -8,12 +8,16 @@ const ClientDashboard = () => {
     
     // Estados básicos
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [showDetail, setShowDetail] = useState(false);
     const [userName, setUserName] = useState("Cargando...");
     const [mechanics, setMechanics] = useState([]);
+    const [searchTerm, setSearchTerm] = useState(""); 
     const [selectedMechanic, setSelectedMechanic] = useState(null);
-    const [apiError, setApiError] = useState(''); // <--- NUEVO: Estado para errores del servidor
+    const [apiError, setApiError] = useState(''); 
+    
+    // NUEVO: Estado para el servicio activo (Seguimiento)
+    const [activeService, setActiveService] = useState(null);
 
-    // Ubicación fija de Mariana (Simulada para MECHIN-71)
     const clientCoords = { lat: 5.067, lng: -75.517 };
 
     const [stats, setStats] = useState({
@@ -23,69 +27,96 @@ const ClientDashboard = () => {
         rating: "4.8 ★"
     });
 
-    /**
-     * MECHIN-71: Carga los mecánicos enviando coordenadas para recibir la lista ordenada
-     */
+    // Cargar mecánicos cercanos
     const loadNearbyMechanics = useCallback(async () => {
         try {
             const url = `http://localhost:5000/api/mechanics/nearby?lat=${clientCoords.lat}&lng=${clientCoords.lng}`;
             const response = await fetch(url);
             const data = await response.json();
-            
             if (data.ok) {
                 setMechanics(data.mechanics);
                 setStats(prev => ({ ...prev, mecanicosCerca: data.mechanics.length }));
             }
-        } catch (error) {
-            console.error("Error al cargar mecánicos cercanos:", error);
-        }
+        } catch (error) { console.error("Error mecánicos:", error); }
+    }, [clientCoords.lat, clientCoords.lng]);
+
+    // NUEVO: Verificar si hay un servicio en curso
+    const checkActiveService = useCallback(async () => {
+        try {
+            const response = await fetch('http://localhost:5000/api/services/active/1'); // Ajustar ID según sesión
+            const data = await response.json();
+            if (data.ok && data.service) {
+                setActiveService(data.service);
+            } else {
+                setActiveService(null);
+            }
+        } catch (error) { console.error("Error checking active service:", error); }
     }, []);
+
+    const filteredMechanics = mechanics.filter(mech => 
+        mech.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (mech.especialidad && mech.especialidad.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
 
     const loadUserProfile = async () => {
         try {
             const response = await fetch('http://localhost:5000/api/users/1');
             const data = await response.json();
-            if (data.ok) {
-                setUserName(data.user.nombre_completo);
-            }
-        } catch (error) {
-            console.error("Error al cargar perfil:", error);
-            setUserName("Usuario");
-        }
+            if (data.ok) setUserName(data.user.nombre_completo);
+        } catch (error) { setUserName("Mariana Barbosa"); }
     };
 
     const loadActiveCount = async () => {
         try {
             const response = await fetch('http://localhost:5000/api/services/count/1');
             const data = await response.json();
-            if (data.ok) {
-                setStats(prev => ({ ...prev, activos: data.count }));
-            }
-        } catch (error) {
-            console.error("Error al cargar estadísticas:", error);
-        }
+            if (data.ok) setStats(prev => ({ ...prev, activos: data.count }));
+        } catch (error) { console.error("Error stats:", error); }
     };
 
-    const openSolicitarModal = (mech = null) => {
+    // --- LÓGICA DE NAVEGACIÓN ---
+    const handleSelectMechanic = (mech) => {
         setSelectedMechanic(mech);
-        setApiError(''); // Limpiar errores previos al abrir
+        setShowDetail(true);
+    };
+
+    const openSolicitarModal = () => {
+        setShowDetail(false);
         setIsModalOpen(true);
     };
 
     const closeSolicitarModal = () => {
         setIsModalOpen(false);
         setSelectedMechanic(null); 
-        setApiError(''); // Limpiar errores al cerrar
+        setApiError(''); 
+    };
+
+    // NUEVO: Cancelar servicio
+    const handleCancelService = async (serviceId) => {
+        if (!window.confirm("¿Deseas cancelar el servicio?")) return;
+        try {
+            const response = await fetch(`http://localhost:5000/api/services/cancel/${serviceId}`, { method: 'PUT' });
+            const result = await response.json();
+            if (result.ok) {
+                setActiveService(null);
+                loadActiveCount();
+            }
+        } catch (error) { console.error("Error al cancelar:", error); }
     };
 
     useEffect(() => {
         loadUserProfile();
         loadActiveCount();
         loadNearbyMechanics();
-    }, [loadNearbyMechanics]);
+        checkActiveService();
+        
+        // Polling para actualizar estado del servicio cada 20 segundos
+        const interval = setInterval(checkActiveService, 20000);
+        return () => clearInterval(interval);
+    }, [loadNearbyMechanics, checkActiveService]);
 
     const handleFinalSubmit = async (datosSolicitud) => {
-        setApiError(''); // Reiniciar error antes de intentar
+        setApiError(''); 
         const targetMecanicoId = selectedMechanic?.mecanico_id || selectedMechanic?.id || null;
 
         const payload = {
@@ -105,29 +136,23 @@ const ClientDashboard = () => {
                 body: JSON.stringify(payload),
             });
             const result = await response.json();
-            
             if (result.ok) {
                 closeSolicitarModal();
                 await loadActiveCount(); 
-                // Aquí podrías añadir un toast de éxito si quisieras
+                await checkActiveService(); // Cargar la tarjeta de seguimiento inmediatamente
             } else {
-                // MODIFICADO: En lugar de alert, mandamos el mensaje al estado apiError
                 setApiError(result.message || "No se pudo procesar la solicitud.");
             }
-        } catch (error) {
-            console.error("Error al enviar solicitud:", error);
-            setApiError("Error de conexión con el servidor.");
-        }
+        } catch (error) { setApiError("Error de conexión."); }
     };
 
     const getInitials = (name) => {
-        if (!name || name === "Cargando...") return "??";
+        if (!name || name === "Cargando...") return "MB";
         return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
     };
 
     return (
         <div className="shell">
-            {/* SIDEBAR */}
             <div className="sidebar">
                 <div className="sb-logo">
                     <div className="sb-logo-box">
@@ -138,17 +163,9 @@ const ClientDashboard = () => {
                     </div>
                     <div className="sb-brand">ME<em>CH</em>IN</div>
                 </div>
-
                 <div className="sb-section">Principal</div>
                 <div className="sb-item active">Inicio</div>
                 <div className="sb-item">Buscar mecánicos</div>
-                <div className="sb-item">Repuestos</div>
-                <div className="sb-item">Mis pagos</div>
-
-                <div className="sb-section">Cuenta</div>
-                <div className="sb-item">Mi perfil</div>
-                <div className="sb-item">Configuración</div>
-
                 <div className="sb-spacer"></div>
                 <div className="sb-user">
                     <div className="sb-avatar">{getInitials(userName)}</div>
@@ -159,130 +176,131 @@ const ClientDashboard = () => {
                 </div>
             </div>
 
-            {/* MAIN CONTENT */}
             <div className="main">
                 <div className="topbar">
                     <div className="search-box">
-                        <span>Buscar mecánicos, servicios o repuestos...</span>
-                    </div>
-                    <div className="tb-btn notif-dot">
-                        <svg viewBox="0 0 16 16" fill="none">
-                            <path d="M8 2a4 4 0 0 1 4 4v3l1 2H3l1-2V6a4 4 0 0 1 4-4z" stroke="#6b85a0" strokeWidth="1.3"/>
-                            <path d="M6.5 13a1.5 1.5 0 0 0 3 0" stroke="#6b85a0" strokeWidth="1.3"/>
-                        </svg>
-                    </div>
-                    <div className="tb-btn">
-                        <svg viewBox="0 0 16 16" fill="none">
-                            <circle cx="8" cy="6" r="2.5" stroke="#6b85a0" strokeWidth="1.3"/>
-                            <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#6b85a0" strokeWidth="1.3" strokeLinecap="round"/>
-                        </svg>
+                        <input 
+                            type="text" 
+                            placeholder="Buscar mecánicos o servicios..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            style={{ background: 'transparent', border: 'none', color: 'white', width: '100%', outline: 'none' }}
+                        />
                     </div>
                 </div>
 
                 <div className="content">
+                    {/* NUEVO: TARJETA FLOTANTE DE SERVICIO ACTIVO */}
+                    {activeService && (
+                        <div className="active-service-floating-card">
+                            <div className="as-status-badge">
+                                <span className="pulse-dot"></span>
+                                {activeService.estado?.replace('_', ' ').toUpperCase()}
+                            </div>
+                            <div className="as-content">
+                                <div className="as-info">
+                                    <strong>{activeService.mecanico_nombre || "Buscando mecánico..."}</strong>
+                                    <span>{activeService.tipo_servicio} • En Manizales</span>
+                                </div>
+                                <div className="as-actions">
+                                    <button className="btn-chat-icon">💬</button>
+                                    <button className="btn-cancel-icon" onClick={() => handleCancelService(activeService.id)}>×</button>
+                                </div>
+                            </div>
+                            <div className="as-progress-bar">
+                                <div className={`progress-fill ${activeService.estado}`}></div>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="greeting">
                         <div>
                             <div className="g-title">Hola, {userName} 👋</div>
-                            <div className="g-sub">¿Necesitas un mecánico hoy? Hay {stats.mecanicosCerca} disponibles cerca de ti.</div>
+                            <div className="g-sub">Hay {stats.mecanicosCerca} mecánicos en tu zona de Manizales.</div>
                         </div>
-                        <button className="btn-solicitar" onClick={() => openSolicitarModal(null)}>
-                            + Solicitar servicio
+                        <button className="btn-solicitar" onClick={() => { setSelectedMechanic(null); setIsModalOpen(true); }}>
+                            + Solicitar rápido
                         </button>
                     </div>
 
                     <div className="stats">
                         <div className="stat">
                             <div className="stat-val or">{stats.mecanicosCerca}</div>
-                            <div className="stat-label">Mecánicos disponibles</div>
+                            <div className="stat-label">Disponibles</div>
                         </div>
                         <div className="stat">
                             <div className="stat-val bl">{stats.activos}</div>
-                            <div className="stat-label">Servicios activos</div>
+                            <div className="stat-label">Activos</div>
                         </div>
                         <div className="stat">
                             <div className="stat-val ok">{stats.completados}</div>
-                            <div className="stat-label">Servicios completados</div>
-                        </div>
-                        <div className="stat">
-                            <div className="stat-val">{stats.rating}</div>
-                            <div className="stat-label">Calificación</div>
+                            <div className="stat-label">Completados</div>
                         </div>
                     </div>
 
                     <div className="map-row">
-                        <div className="map-card">
-                            <div className="map-head">Mecánicos cercanos</div>
-                            <div className="map-body" style={{ position: 'relative', overflow: 'hidden' }}>
+                        <div className="map-card" style={{ flex: 2, position: 'relative' }}>
+                            <div className="map-head">Mapa de servicio en tiempo real</div>
+                            <div className="map-body" style={{ position: 'relative', overflow: 'hidden', height: '400px' }}>
                                 <div className="map-grid"></div>
-                                <div className="map-you" style={{ 
-                                    top: '50%', left: '50%', 
-                                    position: 'absolute', transform: 'translate(-50%, -50%)',
-                                    zIndex: 2
-                                }}></div>
                                 
-                                {mechanics.map((mech) => {
-                                    const visualTop = 50 + (mech.lat - clientCoords.lat) * 2000;
-                                    const visualLeft = 50 + (mech.lng - clientCoords.lng) * 2000;
+                                <div className="map-you" style={{ top: '50%', left: '50%', position: 'absolute', transform: 'translate(-50%, -50%)', zIndex: 10 }}>
+                                    <div className="user-marker-rappi">
+                                        <div className="pulse"></div>
+                                        <div className="icon">🏠</div>
+                                    </div>
+                                </div>
+                                
+                                {filteredMechanics.map((mech) => (
+                                    <div 
+                                        key={mech.id} 
+                                        className="map-pin-rappi" 
+                                        style={{ 
+                                            top: `${50 + (mech.lat - clientCoords.lat) * 2000}%`, 
+                                            left: `${50 + (mech.lng - clientCoords.lng) * 2000}%`, 
+                                            position: 'absolute', cursor: 'pointer', zIndex: 5 
+                                        }}
+                                        onClick={() => handleSelectMechanic(mech)}
+                                    >
+                                        <div className="car-icon">🚗</div>
+                                        <span className="car-label">{mech.nombre_completo.split(' ')[0]}</span>
+                                    </div>
+                                ))}
 
-                                    return (
-                                        <div 
-                                            key={mech.mecanico_id || mech.id} 
-                                            className="map-pin" 
-                                            style={{ 
-                                                top: `${visualTop}%`, 
-                                                left: `${visualLeft}%`,
-                                                position: 'absolute',
-                                                cursor: 'pointer',
-                                                zIndex: 3
-                                            }}
-                                            onClick={() => openSolicitarModal(mech)}
-                                        >
-                                            <span style={{ 
-                                                whiteSpace: 'nowrap', 
-                                                fontSize: '10px', 
-                                                background: 'rgba(0,0,0,0.6)', 
-                                                padding: '2px 5px', 
-                                                borderRadius: '4px' 
-                                            }}>
-                                                {mech.nombre_completo.split(' ')[0]} · {mech.distancia}km
-                                            </span>
-                                            <div style={{
-                                                width:'12px', height:'12px', borderRadius:'50%', 
-                                                background:'var(--orange2)', border:'2px solid var(--bg)',
-                                                boxShadow: '0 0 10px var(--orange2)', margin: '0 auto'
-                                            }}></div>
+                                {showDetail && selectedMechanic && (
+                                    <div className="mech-detail-panel">
+                                        <button className="close-panel" onClick={() => setShowDetail(false)}>×</button>
+                                        <div className="detail-header">
+                                            <div className="detail-avatar">{selectedMechanic.nombre_completo[0]}</div>
+                                            <div className="detail-info">
+                                                <h4>{selectedMechanic.nombre_completo}</h4>
+                                                <p>{selectedMechanic.especialidad || 'Mecánico General'}</p>
+                                            </div>
                                         </div>
-                                    );
-                                })}
+                                        <div className="detail-stats">
+                                            <span>⭐ 4.9</span>
+                                            <span>📍 {selectedMechanic.distancia} km</span>
+                                        </div>
+                                        <button className="btn-confirm-mech" onClick={openSolicitarModal}>
+                                            Solicitar Servicio
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        <div className="mecanicos-card">
-                            <div className="mc-head">Disponibles ahora (Más cercanos)</div>
-                            <div className="mc-list" style={{ overflowY: 'auto', maxHeight: '300px' }}>
-                                {mechanics.length > 0 ? (
-                                    mechanics.map((mech) => (
-                                        <div key={mech.mecanico_id || mech.id} className="mc-item">
-                                            <div className="mc-avatar">{getInitials(mech.nombre_completo)}</div>
-                                            <div className="mc-info">
-                                                <div className="mc-name">
-                                                    {mech.nombre_completo} 
-                                                    <span style={{ fontSize: '10px', color: 'var(--orange2)', marginLeft: '8px' }}>
-                                                        {mech.distancia} km
-                                                    </span>
-                                                </div>
-                                                <div className="mc-spec">{mech.especialidad || 'Mecánica general'}</div>
-                                            </div>
-                                            <div className="mc-btn" onClick={() => openSolicitarModal(mech)}>
-                                                Solicitar
-                                            </div>
+                        <div className="mecanicos-card" style={{ flex: 1 }}>
+                            <div className="mc-head">Resultados ({filteredMechanics.length})</div>
+                            <div className="mc-list" style={{ overflowY: 'auto', maxHeight: '400px' }}>
+                                {filteredMechanics.map((mech) => (
+                                    <div key={mech.id} className="mc-item" onClick={() => handleSelectMechanic(mech)}>
+                                        <div className="mc-info">
+                                            <div className="mc-name">{mech.nombre_completo}</div>
+                                            <div className="mc-spec">{mech.distancia} km • {mech.especialidad}</div>
                                         </div>
-                                    ))
-                                ) : (
-                                    <div className="mc-item" style={{ fontSize: '12px', color: 'var(--muted)' }}>
-                                        No hay mecánicos disponibles.
+                                        <button className="mc-btn">Ver</button>
                                     </div>
-                                )}
+                                ))}
                             </div>
                         </div>
                     </div>
@@ -295,7 +313,7 @@ const ClientDashboard = () => {
                 onSubmit={handleFinalSubmit}
                 isSyncing={isSyncing}
                 selectedMechanic={selectedMechanic} 
-                externalError={apiError} // <--- MODIFICADO: Conectado al estado
+                externalError={apiError} 
             />
         </div>
     );

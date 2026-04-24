@@ -74,3 +74,202 @@
 .rep-icon { width:36px; height:36px; border-radius:8px; background:var(--s2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; margin-bottom:10px; }
 .rep-name { font-size:12px; font-weight:500; margin-bottom:3px; }
 .rep-price { font-size:13px; font-weight:700; color:var(--orange2); }
+
+/* Marcador de Usuario con Pulso */
+.user-marker-rappi {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.user-marker-rappi .icon {
+    font-size: 24px;
+    z-index: 2;
+}
+
+.user-marker-rappi .pulse {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 110, 45, 0.4);
+    border-radius: 50%;
+    animation: pulse-animation 2s infinite;
+}
+
+@keyframes pulse-animation {
+    0% { transform: scale(0.5); opacity: 1; }
+    100% { transform: scale(2.5); opacity: 0; }
+}
+
+/* Marcadores de Mecánicos (Carritos) */
+.map-pin-rappi {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: transform 0.2s;
+}
+
+.map-pin-rappi:hover {
+    transform: scale(1.2);
+}
+
+.car-icon {
+    font-size: 20px;
+    filter: drop-shadow(0 0 5px rgba(255,255,255,0.3));
+}
+
+.car-label {
+    font-size: 10px;
+    color: white;
+    background: rgba(0,0,0,0.7);
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-top: 2px;
+}
+
+.mech-detail-panel {
+    position: absolute;
+    right: 15px;
+    top: 15px;
+    bottom: 15px;
+    width: 260px;
+    background: #1a1a1a;
+    border-radius: 12px;
+    z-index: 20;
+    padding: 20px;
+    box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+.close-panel {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.detail-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.detail-avatar {
+    width: 50px;
+    height: 50px;
+    background: #ff6e2d;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.detail-info h4 { margin: 0; color: white; font-size: 1rem; }
+.detail-info p { margin: 0; color: #aaa; font-size: 0.8rem; }
+
+.detail-stats {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: auto;
+    font-size: 0.9rem;
+    color: #eee;
+}
+
+.btn-confirm-mech {
+    width: 100%;
+    padding: 12px;
+    background: #ff6e2d;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+
+.active-service-floating-card {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 380px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 12px 16px;
+    z-index: 1000;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    animation: slideDown 0.4s ease;
+}
+
+@keyframes slideDown {
+    from { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.as-status-badge {
+    font-size: 10px;
+    font-weight: 800;
+    color: #ff6e2d;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: #ff6e2d;
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+}
+
+.as-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.as-info strong { color: #fff; font-size: 14px; display: block; }
+.as-info span { color: #888; font-size: 11px; }
+
+.btn-chat-icon, .btn-cancel-icon {
+    background: #222;
+    border: none;
+    color: white;
+    padding: 8px;
+    border-radius: 8px;
+    margin-left: 5px;
+    cursor: pointer;
+}
+
+.btn-cancel-icon { color: #ff4d4d; font-size: 18px; }
+
+.as-progress-bar {
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    margin-top: 10px;
+    overflow: hidden;
+}
+
+.progress-fill { height: 100%; transition: width 0.5s ease; }
+.progress-fill.pendiente { width: 20%; background: #ff6e2d; }
+.progress-fill.en_camino { width: 60%; background: #2d9bff; }
+.progress-fill.finalizado { width: 100%; background: #2dfa70; }

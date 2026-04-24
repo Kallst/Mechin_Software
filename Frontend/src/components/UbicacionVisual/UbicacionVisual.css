@@ -1,0 +1,66 @@
+.location-card-mech {
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #333;
+    margin: 15px 0;
+}
+
+.location-header-mech {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.loc-label-mech {
+    color: #888;
+    font-size: 11px;
+    margin: 0;
+    text-transform: uppercase;
+}
+
+.loc-address-mech {
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    margin: 0;
+}
+
+/* Carretera */
+.road-container-mech {
+    height: 35px;
+    background: #252525;
+    border-radius: 6px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+}
+
+.road-stripes-mech {
+    width: 100%;
+    height: 1px;
+    border-top: 2px dashed #444;
+}
+
+/* Animación del Carrito */
+.car-animation-mech {
+    position: absolute;
+    font-size: 18px;
+    left: -40px;
+    animation: driveCar 5s linear infinite;
+}
+
+@keyframes driveCar {
+    0% { left: -40px; }
+    100% { left: 110%; }
+}
+
+.loc-footer-mech {
+    font-size: 11px;
+    color: #ff6e2d;
+    margin-top: 10px;
+    text-align: center;
+    font-style: italic;
+}
