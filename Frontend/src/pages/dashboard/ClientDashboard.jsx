@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import './ClientDashboard.css';
 import useGeolocation from '../../hooks/useGeolocation';
 import SolicitarModal from '../../components/SolicitarModal/SolicitarModal';
+import authService from '../../services/auth.service';
 
 // --- NUEVAS IMPORTACIONES PARA EL MAPA REAL ---
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
@@ -45,7 +46,9 @@ const ClientDashboard = () => {
     const [notifications, setNotifications] = useState([]);
     const [showNotif, setShowNotif] = useState(false);
     
-    const clienteId = 1; // ID fijo para desarrollo
+    // Obtener el ID del cliente real desde la sesión
+    const currentUser = authService.getCurrentUser();
+    const clienteId = currentUser ? currentUser.id : 1;
 
     // Estado para el servicio activo
     const [activeService, setActiveService] = useState(null);
