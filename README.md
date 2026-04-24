@@ -332,3 +332,8 @@ Las variables `EMAIL_USER` y `EMAIL_PASS` no están en el `.env` o están vacía
 
 Proyecto desarrollado como parte del curso de Ingeniería de Software — Universidad de Manizales.
 Stack: **React + Node.js + PostgreSQL**
+
+--ANTES DE EJECUTAR EL PROYECTO INSTALAR
+npm install react-leaflet leaflet (en el frontend)
+npm install socket.io (caperta mechin_software)
+npm install socket.io-client (carpeta frontend)
