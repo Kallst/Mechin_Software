@@ -86,6 +86,7 @@
     width: 100%; background: var(--s2); border: 1px solid var(--border2);
     border-radius: 9px; padding: 11px 14px; color: var(--text);
     font-family: var(--ff-b); font-size: 13px; outline: none;
+    transition: all 0.2s ease;
 }
 
 textarea.fin-mech { height: 90px; resize: none; }
@@ -110,19 +111,6 @@ textarea.fin-mech { height: 90px; resize: none; }
 .ubic-sub-mech { font-size: 11px; color: var(--muted2); }
 .ubic-change-mech { font-size: 11px; color: var(--blue2); font-weight: 600; cursor: pointer; }
 
-.estado-row-mech {
-    display: flex; align-items: center; gap: 10px; background: var(--s2);
-    border: 1px solid var(--border); border-radius: 9px; padding: 11px 14px;
-}
-
-.estado-dot-mech { width: 8px; height: 8px; border-radius: 50%; background: #f0a500; }
-.estado-text-mech { font-size: 12px; color: var(--muted2); }
-.estado-badge-mech {
-    margin-left: auto; background: #2a1f08; border: 1px solid #7a5200;
-    border-radius: 20px; padding: 3px 10px; font-size: 10px; color: #f0a500;
-    font-family: var(--ff-h); font-weight: 600;
-}
-
 .modal-footer-mech { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; }
 
 .btn-cancel-mech {
@@ -142,5 +130,30 @@ textarea.fin-mech { height: 90px; resize: none; }
 }
 
 .btn-send-mech:hover { filter: brightness(1.1); transform: translateY(-1px); }
-.btn-send-mech:active { transform: translateY(0); }
 .btn-send-mech:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* --- ESTILOS DE VALIDACIÓN --- */
+
+@keyframes slideDownError {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.error-banner-mech {
+    background: rgba(255, 82, 82, 0.1);
+    color: #ff5252;
+    padding: 10px 14px;
+    border-radius: 9px;
+    margin-bottom: 18px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(255, 82, 82, 0.2);
+    animation: slideDownError 0.3s ease-out forwards;
+}
+
+.fin-mech.input-error {
+    border-color: #ff5252 !important;
+    background: rgba(255, 82, 82, 0.03) !important;
+}

@@ -11,9 +11,9 @@ const ClientDashboard = () => {
     const [userName, setUserName] = useState("Cargando...");
     const [mechanics, setMechanics] = useState([]);
     const [selectedMechanic, setSelectedMechanic] = useState(null);
+    const [apiError, setApiError] = useState(''); // <--- NUEVO: Estado para errores del servidor
 
     // Ubicación fija de Mariana (Simulada para MECHIN-71)
-    // En una fase posterior, esto vendría del hook useGeolocation
     const clientCoords = { lat: 5.067, lng: -75.517 };
 
     const [stats, setStats] = useState({
@@ -28,7 +28,6 @@ const ClientDashboard = () => {
      */
     const loadNearbyMechanics = useCallback(async () => {
         try {
-            // Enviamos las coordenadas de Mariana como Query Params
             const url = `http://localhost:5000/api/mechanics/nearby?lat=${clientCoords.lat}&lng=${clientCoords.lng}`;
             const response = await fetch(url);
             const data = await response.json();
@@ -69,12 +68,14 @@ const ClientDashboard = () => {
 
     const openSolicitarModal = (mech = null) => {
         setSelectedMechanic(mech);
+        setApiError(''); // Limpiar errores previos al abrir
         setIsModalOpen(true);
     };
 
     const closeSolicitarModal = () => {
         setIsModalOpen(false);
         setSelectedMechanic(null); 
+        setApiError(''); // Limpiar errores al cerrar
     };
 
     useEffect(() => {
@@ -84,10 +85,11 @@ const ClientDashboard = () => {
     }, [loadNearbyMechanics]);
 
     const handleFinalSubmit = async (datosSolicitud) => {
+        setApiError(''); // Reiniciar error antes de intentar
         const targetMecanicoId = selectedMechanic?.mecanico_id || selectedMechanic?.id || null;
 
         const payload = {
-            cliente_id: 1, // ID fijo por ahora para pruebas
+            cliente_id: 1, 
             mecanico_id: targetMecanicoId,
             tipo_servicio: datosSolicitud.tipo_servicio,
             descripcion: datosSolicitud.descripcion,
@@ -107,15 +109,14 @@ const ClientDashboard = () => {
             if (result.ok) {
                 closeSolicitarModal();
                 await loadActiveCount(); 
-                alert(targetMecanicoId 
-                    ? `¡Solicitud directa enviada a ${selectedMechanic.nombre_completo.split(' ')[0]}!` 
-                    : "¡Solicitud general enviada con éxito!");
+                // Aquí podrías añadir un toast de éxito si quisieras
             } else {
-                alert("Error: " + result.message);
+                // MODIFICADO: En lugar de alert, mandamos el mensaje al estado apiError
+                setApiError(result.message || "No se pudo procesar la solicitud.");
             }
         } catch (error) {
             console.error("Error al enviar solicitud:", error);
-            alert("No se pudo conectar con el servidor.");
+            setApiError("Error de conexión con el servidor.");
         }
     };
 
@@ -213,7 +214,6 @@ const ClientDashboard = () => {
                             <div className="map-head">Mecánicos cercanos</div>
                             <div className="map-body" style={{ position: 'relative', overflow: 'hidden' }}>
                                 <div className="map-grid"></div>
-                                {/* El punto azul representa a Mariana */}
                                 <div className="map-you" style={{ 
                                     top: '50%', left: '50%', 
                                     position: 'absolute', transform: 'translate(-50%, -50%)',
@@ -221,7 +221,6 @@ const ClientDashboard = () => {
                                 }}></div>
                                 
                                 {mechanics.map((mech) => {
-                                    // Cálculo visual para posicionar pines relativo al centro (50,50)
                                     const visualTop = 50 + (mech.lat - clientCoords.lat) * 2000;
                                     const visualLeft = 50 + (mech.lng - clientCoords.lng) * 2000;
 
@@ -296,6 +295,7 @@ const ClientDashboard = () => {
                 onSubmit={handleFinalSubmit}
                 isSyncing={isSyncing}
                 selectedMechanic={selectedMechanic} 
+                externalError={apiError} // <--- MODIFICADO: Conectado al estado
             />
         </div>
     );

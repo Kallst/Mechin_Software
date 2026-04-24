@@ -1,20 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import './SolicitarModal.css';
 
-const SolicitarModal = ({ isOpen, onClose, onSubmit, isSyncing, selectedMechanic }) => {
+// Agregamos externalError a las props recibidas
+const SolicitarModal = ({ isOpen, onClose, onSubmit, isSyncing, selectedMechanic, externalError }) => {
     // Estados para los campos del formulario
     const [tipo, setTipo] = useState('Mecánica general');
     const [descripcion, setDescripcion] = useState('');
     const [vehiculo, setVehiculo] = useState('');
     const [urgencia, setUrgencia] = useState('Normal');
+    
+    // Estado para manejar el error visual de validación local
+    const [error, setError] = useState('');
 
-    // Resetear campos cuando el modal se abre o se cierra
+    // Resetear campos y errores cuando el modal se abre
     useEffect(() => {
         if (isOpen) {
             setTipo('Mecánica general');
             setDescripcion('');
             setVehiculo('');
             setUrgencia('Normal');
+            setError(''); 
         }
     }, [isOpen]);
 
@@ -24,41 +29,40 @@ const SolicitarModal = ({ isOpen, onClose, onSubmit, isSyncing, selectedMechanic
      * Maneja el envío del formulario
      */
     const handleSubmit = () => {
-        // Validación básica
+        // 1. Validación: Descripción obligatoria
         if (!descripcion.trim()) {
-            return alert("Por favor, describe el problema para que el mecánico pueda ayudarte.");
+            setError("Por favor, describe el problema para que el mecánico pueda ayudarte.");
+            return;
+        }
+
+        // 2. Validación: Vehículo obligatorio (Criterio MECHIN-23)
+        if (!vehiculo) {
+            setError("Por favor, selecciona un vehículo para continuar.");
+            return;
         }
         
-        // --- LA CORRECCIÓN LÓGICA (Manteniendo el ID) ---
-        // Extraemos el ID del mecánico seleccionado de las props (mecanico_id o id)
+        setError('');
         const targetId = selectedMechanic ? (selectedMechanic.mecanico_id || selectedMechanic.id) : null;
 
-        // Construimos el payload combinando datos del formulario y el ID del mecánico
         const payload = {
-            cliente_id: 1, // ID fijo de Mariana para la prueba
-            mecanico_id: targetId, // Este es el ID que arreglamos
+            cliente_id: 1, 
+            mecanico_id: targetId, 
             tipo_servicio: tipo,
-            // Guardamos vehículo y urgencia dentro de la descripción para no alterar la DB
-            descripcion: `VEHÍCULO: ${vehiculo || 'No especificado'} | URGENCIA: ${urgencia} | DETALLE: ${descripcion}`,
-            direccion_servicio: "Cra. 23 #64-15, Manizales", // Ubicación predefinida
+            // Guardamos vehículo y urgencia dentro de la descripción para la DB
+            descripcion: `VEHÍCULO: ${vehiculo} | URGENCIA: ${urgencia} | DETALLE: ${descripcion}`,
+            direccion_servicio: "Cra. 23 #64-15, Manizales",
             latitud_servicio: 5.067, 
             longitud_servicio: -75.517
         };
 
-        // Enviamos al Dashboard para que haga el fetch
         onSubmit(payload);
     };
 
-    /**
-     * Genera iniciales para el avatar
-     */
     const getInitials = (name) => {
         if (!name) return "??";
         return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
     };
 
-    // --- RESTAURACIÓN DEL DISEÑO VISUAL (Primera Imagen) ---
-    // Definimos los servicios con sus iconos SVG originales y clases de color
     const servicios = [
         { id: 'Mecánica general', color: 'or', icon: <svg viewBox="0 0 16 16" fill="none"><path d="M3 8l2-4h6l2 4" stroke="currentColor" strokeWidth="1.3"/><rect x="2" y="8" width="12" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/></svg> },
         { id: 'Eléctrica', color: 'bl', icon: <svg viewBox="0 0 16 16" fill="none"><path d="M4 8h8M8 4v8" stroke="currentColor" strokeWidth="1.3"/><circle cx="8" cy="8" r="5" stroke="currentColor" strokeWidth="1.2"/></svg> },
@@ -70,19 +74,14 @@ const SolicitarModal = ({ isOpen, onClose, onSubmit, isSyncing, selectedMechanic
 
     return (
         <div className="overlay-modal" onClick={onClose}>
-            {/* Contenedor principal con la clase original 'modal-container-mech' */}
             <div className="modal-container-mech" onClick={(e) => e.stopPropagation()}>
-                
-                {/* HEADER DEL MODAL */}
                 <div className="modal-header-mech">
                     <div className="mh-left-mech">
                         <div className="mh-icon-mech">
-                            {/* Icono de carro naranja original */}
                             <svg viewBox="0 0 18 18" fill="none"><path d="M4 9l2-4h6l2 4" stroke="#ff6e2d" strokeWidth="1.4"/><rect x="3" y="9" width="12" height="5" rx="1.2" stroke="#ff6e2d" strokeWidth="1.3"/><circle cx="6.5" cy="14" r="1.5" fill="#ff6e2d"/><circle cx="11.5" cy="14" r="1.5" fill="#ff6e2d"/></svg>
                         </div>
                         <div>
                             <div className="mh-title-mech">
-                                {/* Título dinámico: Solicitar a [Nombre] o Solicitar servicio general */}
                                 {selectedMechanic ? `Solicitar a ${selectedMechanic.nombre_completo.split(' ')[0]}` : "Solicitar servicio"}
                             </div>
                             <div className="mh-sub-mech">
@@ -90,64 +89,63 @@ const SolicitarModal = ({ isOpen, onClose, onSubmit, isSyncing, selectedMechanic
                             </div>
                         </div>
                     </div>
-                    {/* Botón de cerrar original */}
                     <div className="close-btn-mech" onClick={onClose} title="Cerrar">✕</div>
                 </div>
 
-                {/* CUERPO DEL MODAL */}
                 <div className="modal-body-mech">
-                    {/* Badge del mecánico seleccionado (solo aparece si hay uno) */}
                     {selectedMechanic && (
                         <div className="selected-mech-badge" style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255, 110, 45, 0.05)', padding: '12px', borderRadius: '12px', marginBottom: '20px', border: '1px dashed rgba(255, 110, 45, 0.2)' }}>
                             <div className="mc-avatar" style={{ width: '45px', height: '45px', fontSize: '14px', background: 'var(--orange2)', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
                                 {getInitials(selectedMechanic.nombre_completo)}
                             </div>
                             <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: '600', fontSize: '14px', color: '#fff' }}>
-                                    {selectedMechanic.nombre_completo}
-                                </div>
-                                <div style={{ fontSize: '12px', color: 'var(--muted)' }}>
-                                    {selectedMechanic.especialidad || 'Mecánico General'} • {selectedMechanic.distancia || '0.5'}km de distancia
-                                </div>
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#ffcc00' }}>⭐ {selectedMechanic.promedio_rating || '5.0'}</div>
+                                <div style={{ fontWeight: '600', fontSize: '14px', color: '#fff' }}>{selectedMechanic.nombre_completo}</div>
+                                <div style={{ fontSize: '12px', color: 'var(--muted)' }}>{selectedMechanic.especialidad || 'Mecánico General'}</div>
                             </div>
                         </div>
                     )}
 
-                    {/* SECCIÓN TIPO DE SERVICIO - RESTAURADA AL DISEÑO ORIGINAL */}
                     <span className="sec-label-mech">Tipo de servicio</span>
                     <div className="tipo-grid-mech">
                         {servicios.map((s) => (
-                            <div 
-                                key={s.id} 
-                                className={`tipo-card-mech ${tipo === s.id ? 'on' : ''}`} 
-                                onClick={() => setTipo(s.id)}
-                            >
-                                {/* Icono SVG original con su clase de color ('or', 'bl', 'gr') */}
+                            <div key={s.id} className={`tipo-card-mech ${tipo === s.id ? 'on' : ''}`} onClick={() => setTipo(s.id)}>
                                 <div className={`tc-icon-mech ${s.color}`}>{s.icon}</div>
                                 <div className="tc-label-mech">{s.id}</div>
                             </div>
                         ))}
                     </div>
 
-                    {/* CAMPO DESCRIPCIÓN */}
                     <div className="field-mech">
                         <label>Descripción del problema</label>
                         <textarea 
-                            className="fin-mech" 
-                            placeholder={`Describe qué le sucede a tu vehículo para que el mecánico pueda ayudarte...`}
+                            className={`fin-mech ${error && !descripcion ? 'input-error' : ''}`} 
+                            placeholder="Describe qué le sucede a tu vehículo..."
                             value={descripcion}
-                            onChange={(e) => setDescripcion(e.target.value)}
+                            onChange={(e) => {
+                                setDescripcion(e.target.value);
+                                if(error) setError('');
+                            }}
                         />
                     </div>
 
-                    {/* FILA DE VEHÍCULO Y URGENCIA */}
+                    {/* Banner de error dual (Local o del Servidor) */}
+                    {(error || externalError) && (
+                        <div className="error-banner-mech">
+                            <span>⚠️</span> {error || externalError}
+                        </div>
+                    )}
+
                     <div className="form-row-mech">
                         <div className="field-mech">
                             <label>Vehículo</label>
-                            <select className="fin-mech select-mech" value={vehiculo} onChange={(e) => setVehiculo(e.target.value)}>
+                            <select 
+                                className={`fin-mech select-mech ${error && !vehiculo ? 'input-error' : ''}`} 
+                                value={vehiculo} 
+                                onChange={(e) => {
+                                    setVehiculo(e.target.value);
+                                    if(error) setError('');
+                                }}
+                            >
                                 <option value="">Seleccionar vehículo...</option>
                                 <option value="Toyota Corolla 2018">Toyota Corolla 2018</option>
                                 <option value="Mazda 3 2020">Mazda 3 2020</option>
@@ -163,7 +161,6 @@ const SolicitarModal = ({ isOpen, onClose, onSubmit, isSyncing, selectedMechanic
                         </div>
                     </div>
 
-                    {/* SECCIÓN DE UBICACIÓN ORIGINAL */}
                     <div className="field-mech">
                         <label>Ubicación del servicio</label>
                         <div className="ubic-box-mech">
@@ -174,15 +171,12 @@ const SolicitarModal = ({ isOpen, onClose, onSubmit, isSyncing, selectedMechanic
                                 <div className="ubic-label-mech">Cra. 23 #64-15, Manizales</div>
                                 <div className="ubic-sub-mech">Ubicación registrada en tu perfil</div>
                             </div>
-                            <div className="ubic-change-mech">Cambiar</div>
                         </div>
                     </div>
                 </div>
 
-                {/* FOOTER DEL MODAL CON BOTONES ORIGINALES */}
                 <div className="modal-footer-mech">
                     <button className="btn-cancel-mech" onClick={onClose}>Cancelar</button>
-                    {/* Botón de confirmar con texto dinámico y estado 'disabled' */}
                     <button className="btn-send-mech" onClick={handleSubmit} disabled={isSyncing}>
                         {isSyncing ? 'Enviando...' : `Confirmar Solicitud ${selectedMechanic ? 'Directa' : ''} →`}
                     </button>
