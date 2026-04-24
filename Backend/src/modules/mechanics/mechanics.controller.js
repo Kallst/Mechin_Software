@@ -28,7 +28,7 @@ const getNearbyMechanics = async (req, res) => {
             FROM usuarios u
             JOIN perfiles_mecanico pm ON u.id = pm.usuario_id
             WHERE pm.disponible = true 
-              AND pm.estado_validacion = 'aprobado'
+              AND pm.estado_validacion IN ('aprobado', 'pendiente')
         `;
         
         const result = await db.query(query);
@@ -75,4 +75,57 @@ const getNearbyMechanics = async (req, res) => {
     }
 };
 
-module.exports = { getNearbyMechanics };
+// --- RUTAS MECÁNICO (PERFIL Y DISPONIBILIDAD) ---
+
+const getProfile = async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const query = `
+            SELECT pm.*, u.nombre_completo, u.correo, u.telefono, u.direccion 
+            FROM perfiles_mecanico pm
+            JOIN usuarios u ON pm.usuario_id = u.id
+            WHERE pm.usuario_id = $1
+        `;
+        const result = await db.query(query, [userId]);
+        if (result.rows.length === 0) return res.status(404).json({ ok: false, message: "Perfil no encontrado" });
+        res.json({ ok: true, profile: result.rows[0] });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+};
+
+const updateProfile = async (req, res) => {
+    const { userId } = req.params;
+    const { biografia, telefono, direccion } = req.body;
+    
+    try {
+        await db.query(`
+            UPDATE usuarios SET telefono = $1, direccion = $2 WHERE id = $3
+        `, [telefono, direccion, userId]);
+
+        await db.query(`
+            UPDATE perfiles_mecanico SET biografia = $1 WHERE usuario_id = $2
+        `, [biografia, userId]);
+
+        res.json({ ok: true, message: "Perfil actualizado correctamente" });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+};
+
+const toggleAvailability = async (req, res) => {
+    const { userId } = req.params;
+    const { disponible } = req.body;
+
+    try {
+        await db.query(`
+            UPDATE perfiles_mecanico SET disponible = $1 WHERE usuario_id = $2
+        `, [disponible, userId]);
+        
+        res.json({ ok: true, message: `Disponibilidad actualizada a ${disponible}` });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+};
+
+module.exports = { getNearbyMechanics, getProfile, updateProfile, toggleAvailability };
