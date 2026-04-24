@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const http = require('http'); // <--- NUEVO: Para crear el servidor HTTP
+const { Server } = require('socket.io'); // <--- NUEVO: Clase de Socket.io
 const db = require('./src/config/db');
 
 // Importación de rutas
@@ -12,6 +14,15 @@ const mechanicRoutes = require('./src/modules/mechanics/mechanics.routes');
 const notificationRoutes = require('./src/modules/notifications/notifications.routes');
 
 const app = express();
+
+// --- CONFIGURACIÓN DE SERVIDOR Y SOCKETS ---
+const server = http.createServer(app); // Envolvemos app con http
+const io = new Server(server, {
+    cors: {
+        origin: "http://localhost:3000", // Permite que tu React se conecte
+        methods: ["GET", "POST"]
+    }
+});
 
 // --- MIDDLEWARES ---
 app.use(cors());
@@ -25,15 +36,33 @@ app.use('/api/services', servicesRoutes);
 app.use('/api/mechanics', mechanicRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// --- SIMULADOR DE MOVIMIENTO DINÁMICO ---
-// Variable para crear trayectorias fluidas
-let step = 0;
+// --- LÓGICA DE CHAT (SOCKETS) ---
+io.on('connection', (socket) => {
+    console.log('⚡ Nuevo usuario conectado al chat:', socket.id);
 
+    // Unirse a la sala del servicio
+    socket.on('join_chat', (serviceId) => {
+        socket.join(`room_${serviceId}`);
+        console.log(`💬 Usuario unido a sala: room_${serviceId}`);
+    });
+
+    // Recibir y retransmitir mensajes
+    socket.on('send_message', (data) => {
+        // data: { serviceId, senderId, senderName, text, time }
+        console.log('📩 Nuevo mensaje:', data.text);
+        io.to(`room_${data.serviceId}`).emit('receive_message', data);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('❌ Usuario desconectado del socket');
+    });
+});
+
+// --- SIMULADOR DE MOVIMIENTO DINÁMICO (Se mantiene igual) ---
+let step = 0;
 setInterval(async () => {
     step += 0.2; 
     try {
-        // Usamos sin() y cos() con el ID del usuario para que cada mecánico 
-        // tome una dirección distinta y no se amontonen.
         await db.query(`
             UPDATE usuarios
             SET latitud = latitud + (sin(${step} + id) * 0.0007),
@@ -47,7 +76,7 @@ setInterval(async () => {
     } catch (err) {
         console.error("❌ Error en simulador de movimiento:", err.message);
     }
-}, 6000); // Actualización cada 6 segundos para equilibrio entre fluidez y rendimiento
+}, 6000);
 
 // --- PRUEBA DE CONEXIÓN A LA BD ---
 app.get('/api/health', async (req, res) => {
@@ -68,11 +97,13 @@ app.get('/api/health', async (req, res) => {
 
 // --- LANZAMIENTO DEL SERVIDOR ---
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+
+// IMPORTANTE: Ahora escuchamos con 'server', no con 'app'
+server.listen(PORT, () => {
     console.log(`==========================================`);
-    console.log(`🚀 Servidor Mechin corriendo en puerto ${PORT}`);
+    console.log(`🚀 Servidor Mechin (Sockets OK) puerto ${PORT}`);
     console.log(`📍 Mechanics API: http://localhost:${PORT}/api/mechanics/nearby`);
-    console.log(`🔔 Notifications API: http://localhost:${PORT}/api/notifications`);
-    console.log(`💡 Simulador dinámico: ACTIVO (Trayectorias curvas)`);
+    console.log(`💡 Simulador dinámico: ACTIVO`);
+    console.log(`💬 Chat en tiempo real: HABILITADO`);
     console.log(`==========================================`);
 });

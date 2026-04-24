@@ -335,3 +335,5 @@ Stack: **React + Node.js + PostgreSQL**
 
 --ANTES DE EJECUTAR EL PROYECTO INSTALAR
 npm install react-leaflet leaflet (en el frontend)
+npm install socket.io (caperta mechin_software)
+npm install socket.io-client (carpeta frontend)

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ClientDashboard.css';
 import useGeolocation from '../../hooks/useGeolocation';
 import SolicitarModal from '../../components/SolicitarModal/SolicitarModal';
+import ChatWindow from '../../components/ChatWindow/ChatWindow'; // <--- IMPORTACIÓN DEL CHAT
 
 // --- NUEVAS IMPORTACIONES PARA EL MAPA REAL ---
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
@@ -45,7 +46,7 @@ const MapControls = ({ centerUser }) => {
 
 const ClientDashboard = () => {
     const { isSyncing } = useGeolocation();
-    const mapRef = useRef(null); // Referencia para controlar el mapa
+    const mapRef = useRef(null); 
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [showDetail, setShowDetail] = useState(false);
@@ -56,6 +57,9 @@ const ClientDashboard = () => {
     const [apiError, setApiError] = useState('');
     const [notifications, setNotifications] = useState([]);
     const [showNotif, setShowNotif] = useState(false);
+
+    // --- NUEVOS ESTADOS PARA CHAT ---
+    const [showChat, setShowChat] = useState(false);
     
     const clienteId = 1; 
 
@@ -89,6 +93,7 @@ const ClientDashboard = () => {
                 setActiveService(data.service);
             } else {
                 setActiveService(null);
+                setShowChat(false); // Cerrar chat si no hay servicio
             }
         } catch (error) { console.error("Error checking active service:", error); }
     }, [clienteId]);
@@ -145,6 +150,7 @@ const ClientDashboard = () => {
             const result = await response.json();
             if (result.ok) {
                 setActiveService(null);
+                setShowChat(false);
                 loadActiveCount();
             }
         } catch (error) { console.error("Error al cancelar:", error); }
@@ -281,7 +287,8 @@ const ClientDashboard = () => {
                                     <span>{activeService.tipo_servicio} • En Manizales</span>
                                 </div>
                                 <div className="as-actions">
-                                    <button className="btn-chat-icon">💬</button>
+                                    {/* BOTÓN DE CHAT ACTIVADO */}
+                                    <button className="btn-chat-icon" onClick={() => setShowChat(!showChat)}>💬</button>
                                     <button className="btn-cancel-icon" onClick={() => handleCancelService(activeService.id)}>×</button>
                                 </div>
                             </div>
@@ -334,7 +341,6 @@ const ClientDashboard = () => {
                                         attribution='&copy; OpenStreetMap'
                                     />
 
-                                    {/* CONTROLES PERSONALIZADOS */}
                                     <MapControls centerUser={() => mapRef.current?.setView([clientCoords.lat, clientCoords.lng], 15)} />
 
                                     <Marker position={[clientCoords.lat, clientCoords.lng]} icon={homeIcon}>
@@ -406,6 +412,16 @@ const ClientDashboard = () => {
                 selectedMechanic={selectedMechanic} 
                 externalError={apiError} 
             />
+
+            {/* RENDERIZADO DEL CHAT SI ESTÁ ACTIVO */}
+            {showChat && activeService && (
+                <ChatWindow 
+                    serviceId={activeService.id} 
+                    userId={clienteId} 
+                    userName={userName} 
+                    onClose={() => setShowChat(false)} 
+                />
+            )}
         </div>
     );
 };
