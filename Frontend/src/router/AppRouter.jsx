@@ -8,10 +8,13 @@ import RegisterPage from '../pages/auth/RegisterPage';
 import ForgotPasswordPage from '../pages/auth/ForgotPasswordPage';
 import VerifyCodePage from '../pages/auth/VerifyCodePage';
 
-// Dashboards (por ahora placeholders — se implementan en sprints siguientes)
+// Dashboards
 import ClientDashboard from '../pages/dashboard/ClientDashboard';
 import MechanicDashboard from '../pages/dashboard/MechanicDashboard';
 import AdminDashboard from '../pages/dashboard/AdminDashboard';
+
+// Páginas de Pagos (NUEVO)
+import PaymentPage from '../pages/payments/PaymentPage';
 
 const AppRouter = () => {
   return (
@@ -46,6 +49,16 @@ const AppRouter = () => {
         element={
           <ProtectedRoute allowedRoles={['administrador']}>
             <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ── Rutas de Funcionalidades (NUEVO) ─────────── */}
+      <Route
+        path="/pagar"
+        element={
+          <ProtectedRoute allowedRoles={['cliente']}>
+            <PaymentPage />
           </ProtectedRoute>
         }
       />
