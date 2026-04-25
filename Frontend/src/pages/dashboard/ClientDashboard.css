@@ -257,3 +257,22 @@
     background: var(--orange2);
     color: white;
 }
+
+.btn-pagar-icon {
+    background: linear-gradient(90deg, #1d9e75, #22c55e);
+    border: none;
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: var(--ff-h);
+    letter-spacing: 0.5px;
+}
+ 
+.btn-pagar-icon:hover {
+    filter: brightness(1.15);
+    transform: translateY(-1px);
+}

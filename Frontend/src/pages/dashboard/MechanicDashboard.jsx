@@ -11,22 +11,29 @@ const MechanicDashboard = () => {
   const [isAvailable, setIsAvailable] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-  // Cargar usuario autenticado
+  // ── Helper: headers con token JWT ─────────────────────────
+  // CORRECCIÓN: todos los fetch deben mandar el token para pasar el authMiddleware
+  const authHeaders = () => ({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${authService.getToken()}`
+  });
+
+  // ── Cargar usuario autenticado ────────────────────────────
   useEffect(() => {
     const currentUser = authService.getCurrentUser();
-    // Para desarrollo si no hay token usamos uno fijo
     if (currentUser) {
       setUser(currentUser);
-    } else {
-      setUser({ id: 2, nombreCompleto: "Juan Pérez", role: "mecanico" });
     }
   }, []);
 
-  // Cargar perfil del mecanico
+  // ── Cargar perfil del mecánico ────────────────────────────
   const loadProfile = useCallback(async () => {
     if (!user) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/mechanics/profile/${user.id}`);
+      const response = await fetch(
+        `http://localhost:5000/api/mechanics/profile/${user.id}`,
+        { headers: authHeaders() }   // ← token incluido
+      );
       const data = await response.json();
       if (data.ok) {
         setProfile(data.profile);
@@ -37,11 +44,14 @@ const MechanicDashboard = () => {
     }
   }, [user]);
 
-  // Obtener solicitudes pendientes
+  // ── Solicitudes pendientes ────────────────────────────────
   const fetchPendingRequests = useCallback(async () => {
     if (!profile) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/services/mechanic/pending/${profile.id}`);
+      const response = await fetch(
+        `http://localhost:5000/api/services/mechanic/pending/${profile.id}`,
+        { headers: authHeaders() }   // ← token incluido
+      );
       const data = await response.json();
       if (data.ok) {
         setPendingRequests(data.requests);
@@ -51,11 +61,14 @@ const MechanicDashboard = () => {
     }
   }, [profile]);
 
-  // Obtener servicio activo
+  // ── Servicio activo ───────────────────────────────────────
   const fetchActiveService = useCallback(async () => {
     if (!profile) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/services/mechanic/active/${profile.id}`);
+      const response = await fetch(
+        `http://localhost:5000/api/services/mechanic/active/${profile.id}`,
+        { headers: authHeaders() }   // ← token incluido
+      );
       const data = await response.json();
       if (data.ok && data.service) {
         setActiveService(data.service);
@@ -67,7 +80,7 @@ const MechanicDashboard = () => {
     }
   }, [profile]);
 
-  // Efectos de carga
+  // ── Efectos de carga ──────────────────────────────────────
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
@@ -76,7 +89,6 @@ const MechanicDashboard = () => {
     if (profile) {
       fetchPendingRequests();
       fetchActiveService();
-      // Polling cada 10 segundos
       const interval = setInterval(() => {
         fetchPendingRequests();
         fetchActiveService();
@@ -85,19 +97,20 @@ const MechanicDashboard = () => {
     }
   }, [profile, fetchPendingRequests, fetchActiveService]);
 
-  // Acciones
+  // ── Acciones ──────────────────────────────────────────────
   const handleToggleAvailability = async () => {
     const newStatus = !isAvailable;
     try {
-      const response = await fetch(`http://localhost:5000/api/mechanics/availability/${user.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ disponible: newStatus })
-      });
+      const response = await fetch(
+        `http://localhost:5000/api/mechanics/availability/${user.id}`,
+        {
+          method: 'PUT',
+          headers: authHeaders(),    // ← token incluido
+          body: JSON.stringify({ disponible: newStatus })
+        }
+      );
       const data = await response.json();
-      if (data.ok) {
-        setIsAvailable(newStatus);
-      }
+      if (data.ok) setIsAvailable(newStatus);
     } catch (error) {
       console.error("Error actualizando disponibilidad:", error);
     }
@@ -105,11 +118,14 @@ const MechanicDashboard = () => {
 
   const handleAcceptService = async (serviceId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/services/accept/${serviceId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mechanicId: profile.id })
-      });
+      const response = await fetch(
+        `http://localhost:5000/api/services/accept/${serviceId}`,
+        {
+          method: 'PUT',
+          headers: authHeaders(),    // ← token incluido
+          body: JSON.stringify({ mechanicId: profile.id })
+        }
+      );
       const data = await response.json();
       if (data.ok) {
         fetchPendingRequests();
@@ -122,13 +138,15 @@ const MechanicDashboard = () => {
 
   const handleRejectService = async (serviceId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/services/reject/${serviceId}`, {
-        method: 'PUT'
-      });
+      const response = await fetch(
+        `http://localhost:5000/api/services/reject/${serviceId}`,
+        {
+          method: 'PUT',
+          headers: authHeaders()     // ← token incluido
+        }
+      );
       const data = await response.json();
-      if (data.ok) {
-        fetchPendingRequests();
-      }
+      if (data.ok) fetchPendingRequests();
     } catch (error) {
       console.error("Error rechazando servicio:", error);
     }
@@ -137,15 +155,16 @@ const MechanicDashboard = () => {
   const handleUpdateStatus = async (status) => {
     if (!activeService) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/services/status/${activeService.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, mechanicUserId: user.id })
-      });
+      const response = await fetch(
+        `http://localhost:5000/api/services/status/${activeService.id}`,
+        {
+          method: 'PUT',
+          headers: authHeaders(),    // ← token incluido
+          body: JSON.stringify({ status, mechanicUserId: user.id })
+        }
+      );
       const data = await response.json();
-      if (data.ok) {
-        fetchActiveService();
-      }
+      if (data.ok) fetchActiveService();
     } catch (error) {
       console.error("Error actualizando estado:", error);
     }
@@ -153,7 +172,7 @@ const MechanicDashboard = () => {
 
   return (
     <div className="shell">
-      {/* SIDEBAR - IDENTIDAD CLÁSICA MECHIN */}
+      {/* SIDEBAR */}
       <div className="sidebar">
           <div className="sb-logo">
               <div className="sb-logo-box">
@@ -183,7 +202,6 @@ const MechanicDashboard = () => {
             <div className="search-box">
                 <div style={{ color: 'white', fontWeight: 'bold' }}>Panel de Control Mecánico</div>
             </div>
-
             <div className="notif-container" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                 <div className="availability-toggle" style={{ color: 'white' }}>
                   <span style={{ marginRight: '10px' }}>{isAvailable ? '✅ Disponible' : '❌ Ocupado'}</span>
@@ -197,16 +215,16 @@ const MechanicDashboard = () => {
 
         <div className="content">
           <div className="dashboard-content">
+
             {/* SERVICIO ACTIVO */}
             {activeService && (
               <section className="active-service-section">
                 <div className="greeting">
                     <div>
                         <div className="g-title">Servicio Activo 🚨</div>
-                        <div className="g-sub">Tienes un servicio en curso. Por favor complétalo para recibir más solicitudes.</div>
+                        <div className="g-sub">Tienes un servicio en curso. Complétalo para recibir más solicitudes.</div>
                     </div>
                 </div>
-                
                 <div className="active-service-card" style={{ marginTop: '20px' }}>
                   <div className="status-badge">{activeService.estado.replace('_', ' ')}</div>
                   <h3>{activeService.tipo_servicio}</h3>
@@ -214,16 +232,13 @@ const MechanicDashboard = () => {
                   <p><strong>Teléfono:</strong> {activeService.cliente_telefono}</p>
                   <p><strong>Dirección:</strong> {activeService.direccion_servicio}</p>
                   <p><strong>Descripción:</strong> {activeService.descripcion}</p>
-                  
                   <div className="status-actions">
-                    {activeService.estado === 'asignado' || activeService.estado === 'en_progreso' ? (
+                    {(activeService.estado === 'asignado' || activeService.estado === 'en_progreso') && (
                       <button className="btn-status" onClick={() => handleUpdateStatus('en_camino')}>Marcar En Camino</button>
-                    ) : null}
-                    
+                    )}
                     {activeService.estado === 'en_camino' && (
                       <button className="btn-status" onClick={() => handleUpdateStatus('en_progreso')}>Marcar En Progreso (Llegué)</button>
                     )}
-
                     {(activeService.estado === 'en_progreso' || activeService.estado === 'en_camino') && (
                       <button className="btn-accept" onClick={() => handleUpdateStatus('finalizado')}>Terminar Servicio</button>
                     )}
@@ -241,7 +256,6 @@ const MechanicDashboard = () => {
                         <div className="g-sub">Revisa las solicitudes de clientes cercanos y acepta la que prefieras.</div>
                     </div>
                 </div>
-
                 {pendingRequests.length === 0 ? (
                   <p className="no-data" style={{ marginTop: '20px' }}>No hay solicitudes pendientes en este momento.</p>
                 ) : (
@@ -267,18 +281,17 @@ const MechanicDashboard = () => {
                 )}
               </section>
             )}
+
           </div>
         </div>
       </div>
 
-
-
-      <MechanicProfileModal 
-        isOpen={isProfileModalOpen} 
-        onClose={() => setIsProfileModalOpen(false)} 
-        user={user} 
-        initialProfile={profile} 
-        onProfileUpdate={loadProfile} 
+      <MechanicProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        user={user}
+        initialProfile={profile}
+        onProfileUpdate={loadProfile}
       />
     </div>
   );

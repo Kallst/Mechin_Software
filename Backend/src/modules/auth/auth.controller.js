@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const db = require('../../config/db');
-const { enviarCodigoRecuperacion } = require('../../utils/email'); // ← CAMBIO 1
+const { enviarCodigoRecuperacion } = require('../../utils/email');
 
 // ============================================================
 // MECHIN-4 — Registro de usuario
@@ -46,8 +46,10 @@ exports.register = async (req, res) => {
     );
 
     if (rolNombre === 'mecanico') {
+      // ── CORRECCIÓN: disponible = true por defecto al registrarse ──
       const perfilResult = await db.query(
-        `INSERT INTO perfiles_mecanico (usuario_id, ciudad) VALUES ($1, $2) RETURNING id`,
+        `INSERT INTO perfiles_mecanico (usuario_id, ciudad, disponible)
+         VALUES ($1, $2, true) RETURNING id`,
         [usuarioId, city || null]
       );
       const perfilId = perfilResult.rows[0].id;
@@ -178,7 +180,7 @@ exports.logout = (req, res) => {
 
 // ============================================================
 // MECHIN-28 — Recuperación de contraseña (fase 1: solicitud)
-// ===========================================================
+// ============================================================
 exports.forgotPassword = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -204,7 +206,7 @@ exports.forgotPassword = async (req, res) => {
       [usuarioId, token, expiraEn]
     );
 
-    await enviarCodigoRecuperacion(email, token); // ← CAMBIO 2
+    await enviarCodigoRecuperacion(email, token);
 
     res.json({ msg: 'Si el correo existe, recibirás un código de recuperación' });
 
