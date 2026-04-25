@@ -3,6 +3,7 @@ import './ClientDashboard.css';
 import { useNavigate } from 'react-router-dom';
 import useGeolocation from '../../hooks/useGeolocation';
 import SolicitarModal from '../../components/SolicitarModal/SolicitarModal';
+import ChatWindow from '../../components/ChatWindow/ChatWindow'; // ✅ import agregado
 import authService from '../../services/auth.service';
 
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
@@ -68,7 +69,6 @@ const ClientDashboard = () => {
     const currentUser = authService.getCurrentUser();
     const clienteId = currentUser ? currentUser.id : null;
 
-    // ── Helper: headers con token ──────────────────────────
     const getAuthHeaders = () => {
         const token = localStorage.getItem('token');
         return {
@@ -96,7 +96,6 @@ const ClientDashboard = () => {
         }
     }, [clientCoords.lat, clientCoords.lng]);
 
-    // ── FIX 2: sin clienteId en la URL — viene del token ──
     const checkActiveService = useCallback(async () => {
         if (!clienteId) return;
         try {
@@ -139,7 +138,6 @@ const ClientDashboard = () => {
         }
     };
 
-    // ── FIX 1: sin clienteId en la URL — viene del token ──
     const loadActiveCount = async () => {
         if (!clienteId) return;
         try {
@@ -184,7 +182,6 @@ const ClientDashboard = () => {
         setApiError('');
     };
 
-    // ── FIX 3: cancelación con token ──
     const handleCancelService = async (serviceId) => {
         if (!window.confirm("¿Deseas cancelar el servicio?")) return;
         try {
@@ -225,10 +222,8 @@ const ClientDashboard = () => {
         };
     }, [loadNearbyMechanics, checkActiveService]);
 
-    // ── FIX 4: handleFinalSubmit con token ──
     const handleFinalSubmit = async (datosSolicitud) => {
         setApiError('');
-        // FIX 3: mecanico_id debe ser el id de perfiles_mecanico
         const targetMecanicoId = selectedMechanic?.mecanico_id || null;
 
         const payload = {
@@ -357,6 +352,16 @@ const ClientDashboard = () => {
                                 <div className={`progress-fill ${activeService.estado}`}></div>
                             </div>
                         </div>
+                    )}
+
+                    {/* ✅ ChatWindow — se monta solo si hay servicio activo y el usuario abrió el chat */}
+                    {showChat && activeService && (
+                        <ChatWindow
+                            serviceId={activeService.id}
+                            userId={currentUser?.id}
+                            userName={userName}
+                            onClose={() => setShowChat(false)}
+                        />
                     )}
 
                     <div className="greeting">

@@ -1,27 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
-import io from 'socket.io-client';
+import { io } from 'socket.io-client';
 import './ChatWindow.css';
-
-// Conectamos al backend (Asegúrate de que el puerto coincida con tu servidor)
-const socket = io('http://localhost:5000');
 
 const ChatWindow = ({ serviceId, userId, userName, onClose }) => {
     const [message, setMessage] = useState('');
     const [messages, setMessages] = useState([]);
     const chatEndRef = useRef(null);
+    const socketRef = useRef(null); // ✅ socket vive dentro del componente
 
     useEffect(() => {
-        // Unirse a la sala específica de este servicio técnico
-        socket.emit('join_chat', serviceId);
+        // ✅ Se crea al montar el componente
+        socketRef.current = io('http://localhost:5000', {
+            transports: ['websocket']
+        });
+
+        // ✅ Espera a que el socket esté conectado antes de unirse a la sala
+        socketRef.current.on('connect', () => {
+            socketRef.current.emit('join_chat', serviceId);
+        });
 
         // Escuchar mensajes entrantes
-        socket.on('receive_message', (data) => {
+        socketRef.current.on('receive_message', (data) => {
             setMessages((prev) => [...prev, data]);
         });
 
-        // Limpiar al desmontar el componente
+        // ✅ Limpieza correcta: desconecta el socket al desmontar
         return () => {
-            socket.off('receive_message');
+            socketRef.current.disconnect();
         };
     }, [serviceId]);
 
@@ -32,7 +37,7 @@ const ChatWindow = ({ serviceId, userId, userName, onClose }) => {
 
     const sendMessage = (e) => {
         e.preventDefault();
-        if (message.trim()) {
+        if (message.trim() && socketRef.current?.connected) {
             const msgData = {
                 serviceId,
                 senderId: userId,
@@ -40,8 +45,7 @@ const ChatWindow = ({ serviceId, userId, userName, onClose }) => {
                 text: message,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             };
-
-            socket.emit('send_message', msgData);
+            socketRef.current.emit('send_message', msgData);
             setMessage('');
         }
     };
@@ -63,8 +67,8 @@ const ChatWindow = ({ serviceId, userId, userName, onClose }) => {
                     </div>
                 )}
                 {messages.map((m, i) => (
-                    <div 
-                        key={i} 
+                    <div
+                        key={i}
                         className={`message-wrapper ${m.senderId === userId ? 'sent' : 'received'}`}
                     >
                         <div className="message-bubble">
@@ -78,10 +82,10 @@ const ChatWindow = ({ serviceId, userId, userName, onClose }) => {
             </div>
 
             <form className="chat-input-area" onSubmit={sendMessage}>
-                <input 
+                <input
                     type="text"
-                    value={message} 
-                    onChange={(e) => setMessage(e.target.value)} 
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
                     placeholder="Escribe un mensaje..."
                 />
                 <button type="submit" className="chat-send-btn">

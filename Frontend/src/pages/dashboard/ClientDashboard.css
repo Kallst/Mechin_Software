@@ -70,7 +70,7 @@
 
 /* MOVIMIENTO ESTILO UBER (Sincronizado con el server) */
 .leaflet-marker-icon {
-    transition: transform 6s linear !important; /* 6s coincide con el intervalo del server */
+    transition: transform 6s linear !important;
     will-change: transform;
 }
 
@@ -145,11 +145,55 @@
 .btn-chat-icon:hover { background: #30363d; }
 .btn-cancel-icon { color: #f85149; margin-left: 5px; }
 
-.as-progress-bar { height: 4px; background: #21262d; border-radius: 2px; margin-top: 12px; overflow: hidden; }
-.progress-fill { height: 100%; transition: width 1s ease; }
-.progress-fill.pendiente { width: 33%; background: var(--orange2); }
-.progress-fill.en_camino { width: 66%; background: var(--blue2); }
-.progress-fill.finalizado { width: 100%; background: var(--ok); }
+/* ============================================================
+   BARRA DE PROGRESO — todos los estados del backend
+   Estados: pendiente → asignado → en_camino → en_progreso → finalizado
+   ============================================================ */
+.as-progress-bar {
+    height: 4px;
+    background: #21262d;
+    border-radius: 2px;
+    margin-top: 12px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    transition: width 1s ease;
+    /* Estado por defecto si llega un estado desconocido */
+    width: 0%;
+    background: var(--muted);
+}
+
+/* 1/4 — Solicitud creada, esperando mecánico */
+.progress-fill.pendiente {
+    width: 25%;
+    background: var(--orange2);
+}
+
+/* 2/4 — Mecánico asignado */
+.progress-fill.asignado {
+    width: 50%;
+    background: var(--orange2);
+}
+
+/* 3/4 — Mecánico en camino */
+.progress-fill.en_camino {
+    width: 66%;
+    background: var(--blue2);
+}
+
+/* 4/4 — Servicio en ejecución */
+.progress-fill.en_progreso {
+    width: 85%;
+    background: var(--blue2);
+}
+
+/* Completo */
+.progress-fill.finalizado {
+    width: 100%;
+    background: var(--ok);
+}
 
 /* NOTIFICATIONS PANEL */
 .notif-container { position: relative; }
@@ -190,7 +234,7 @@
     position: absolute;
     top: 12px;
     right: 12px;
-    background: rgba(255, 255, 255, 0.05); /* Un fondo sutil */
+    background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border);
     color: var(--muted2);
     width: 28px;
@@ -202,7 +246,7 @@
     cursor: pointer;
     font-size: 14px;
     transition: all 0.2s ease;
-    padding: 0; /* Quita el padding por defecto */
+    padding: 0;
     line-height: 1;
 }
 
@@ -217,7 +261,7 @@
     position: absolute;
     top: 15px;
     left: 15px;
-    z-index: 1000; /* Por encima de las capas del mapa */
+    z-index: 1000;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -271,7 +315,7 @@
     font-family: var(--ff-h);
     letter-spacing: 0.5px;
 }
- 
+
 .btn-pagar-icon:hover {
     filter: brightness(1.15);
     transform: translateY(-1px);
