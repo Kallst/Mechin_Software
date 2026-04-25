@@ -1,7 +1,6 @@
-// src/pages/payments/PaymentPage.jsx
-
-import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import authService from '../../services/auth.service';
 import { processPayment } from '../../services/payments.service';
 import './PaymentPage.css';
 
@@ -9,133 +8,292 @@ const PaymentPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Recibimos los datos del servicio a pagar por navegación.
-    // Si no hay datos (entró por URL directa), ponemos un fallback de prueba.
-    const serviceData = location.state?.service || {
-        id: 1, // Servicio de prueba
-        tipo_servicio: 'Mantenimiento General',
-        mecanico_nombre: 'Mecánico Asignado',
-        precio_estimado: 85000 
-    };
+    // El servicio a pagar llega por navegación: navigate('/pagar', { state: { servicio } })
+    const servicio = location.state?.servicio || null;
 
-    const [selectedMethod, setSelectedMethod] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+    const currentUser = authService.getCurrentUser();
+
+    const [metodoPago, setMetodoPago] = useState('tarjeta');
+    const [monto, setMonto] = useState(servicio?.precio_estimado || '');
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [isSuccess, setIsSuccess] = useState(false);
+    const [pagoExitoso, setPagoExitoso] = useState(null);
 
-    const methods = [
-        { id: 'tarjeta', name: 'Tarjeta de Crédito / Débito', icon: '💳', desc: 'Visa, Mastercard, Amex' },
-        { id: 'nequi', name: 'Nequi', icon: '📱', desc: 'Pago rápido con número de celular' },
-        { id: 'efectivo', name: 'Efectivo', icon: '💵', desc: 'Paga al mecánico al finalizar' },
+    // Si no hay servicio en el state, regresar al dashboard
+    useEffect(() => {
+        if (!servicio) {
+            navigate('/dashboard/cliente', { replace: true });
+        }
+    }, [servicio, navigate]);
+
+    if (!servicio) return null;
+
+    // Cálculo en tiempo real según el monto ingresado
+    const montoNum = parseFloat(monto) || 0;
+    const comision = parseFloat((montoNum * 0.15).toFixed(2));
+    const montoMecanico = parseFloat((montoNum - comision).toFixed(2));
+
+    const metodos = [
+        {
+            id: 'tarjeta',
+            label: 'Tarjeta de crédito / débito',
+            icon: '💳',
+            desc: 'Visa, Mastercard, American Express'
+        },
+        {
+            id: 'nequi',
+            label: 'Nequi',
+            icon: '📱',
+            desc: 'Pago inmediato desde tu app'
+        },
+        {
+            id: 'daviplata',
+            label: 'Daviplata',
+            icon: '🏦',
+            desc: 'Transferencia desde Daviplata'
+        },
+        {
+            id: 'efectivo',
+            label: 'Efectivo',
+            icon: '💵',
+            desc: 'Pago al mecánico al finalizar'
+        },
     ];
 
-    const handlePayment = async () => {
-        if (!selectedMethod) {
-            setError('Por favor selecciona un método de pago.');
+    const handlePagar = async () => {
+        setError('');
+
+        if (!monto || montoNum <= 0) {
+            setError('Ingresa un monto válido para continuar.');
             return;
         }
 
-        setIsLoading(true);
-        setError('');
+        setLoading(true);
+        try {
+            const result = await processPayment({
+                servicio_id: servicio.id,
+                monto: montoNum,
+                metodo_pago: metodoPago,
+            });
 
-        const payload = {
-            servicio_id: serviceData.id,
-            monto: serviceData.precio_estimado,
-            metodo_pago: selectedMethod
-        };
-
-        const result = await processPayment(payload);
-
-        setIsLoading(false);
-
-        if (result.ok) {
-            setIsSuccess(true);
-            // Redirigir al historial después de 3 segundos
-            setTimeout(() => {
-                navigate('/dashboard'); // O a '/payments/history' cuando exista
-            }, 3000);
-        } else {
-            setError(result.message || result.error || 'Ocurrió un error al procesar el pago.');
+            if (result.ok) {
+                setPagoExitoso(result.pago);
+            } else {
+                setError(result.message || 'No se pudo procesar el pago.');
+            }
+        } catch (err) {
+            setError('Error de conexión con el servidor.');
+        } finally {
+            setLoading(false);
         }
     };
 
-    if (isSuccess) {
+    // ── Pantalla de éxito ────────────────────────────────────
+    if (pagoExitoso) {
         return (
-            <div className="payment-shell">
-                <div className="payment-container" style={{ display: 'block' }}>
-                    <div className="pay-success">
-                        <h2>✅ ¡Pago Exitoso!</h2>
-                        <p>Tu transacción se ha registrado correctamente y el servicio ha finalizado.</p>
-                        <p style={{ color: 'var(--muted)', marginTop: '20px' }}>Redirigiendo al inicio...</p>
+            <div className="pay-shell">
+                <div className="pay-success-card">
+                    <div className="pay-success-icon">✅</div>
+                    <h2 className="pay-success-title">¡Pago exitoso!</h2>
+                    <p className="pay-success-sub">
+                        Tu pago fue procesado correctamente.
+                    </p>
+
+                    <div className="pay-receipt">
+                        <div className="receipt-row">
+                            <span>Referencia</span>
+                            <span className="receipt-val accent">{pagoExitoso.referencia}</span>
+                        </div>
+                        <div className="receipt-row">
+                            <span>Método de pago</span>
+                            <span className="receipt-val">{pagoExitoso.metodo_pago}</span>
+                        </div>
+                        <div className="receipt-row">
+                            <span>Monto total</span>
+                            <span className="receipt-val">${pagoExitoso.monto_total.toLocaleString('es-CO')}</span>
+                        </div>
+                        <div className="receipt-row">
+                            <span>Comisión Mechin (15%)</span>
+                            <span className="receipt-val muted">${pagoExitoso.comision_plataforma.toLocaleString('es-CO')}</span>
+                        </div>
+                        <div className="receipt-row">
+                            <span>Pago al mecánico</span>
+                            <span className="receipt-val ok">${pagoExitoso.monto_mecanico.toLocaleString('es-CO')}</span>
+                        </div>
+                        <div className="receipt-row">
+                            <span>Estado</span>
+                            <span className="receipt-val ok">Confirmado ✓</span>
+                        </div>
                     </div>
+
+                    <button
+                        className="pay-btn-primary"
+                        onClick={() => navigate('/dashboard/cliente')}
+                    >
+                        Volver al inicio →
+                    </button>
                 </div>
             </div>
         );
     }
 
+    // ── Pantalla principal de pago ───────────────────────────
     return (
-        <div className="payment-shell">
-            <div className="payment-container">
-                <div className="payment-header">
-                    <h1>Confirmar Pago</h1>
-                    <button className="btn-back" onClick={() => navigate(-1)}>Volver</button>
-                </div>
+        <div className="pay-shell">
+            <div className="pay-layout">
 
-                {/* Columna Izquierda: Resumen */}
-                <div className="summary-section">
-                    <div className="summary-title">Resumen del Servicio</div>
-                    
-                    <div className="summary-item">
-                        <span>Servicio</span>
-                        <strong>{serviceData.tipo_servicio}</strong>
-                    </div>
-                    <div className="summary-item">
-                        <span>Mecánico</span>
-                        <span>{serviceData.mecanico_nombre}</span>
-                    </div>
-                    <div className="summary-item">
-                        <span>Ubicación</span>
-                        <span>Manizales, Caldas</span>
-                    </div>
-                    
-                    <div className="summary-item total">
-                        <span>Total a Pagar</span>
-                        <span>$ {serviceData.precio_estimado.toLocaleString('es-CO')}</span>
-                    </div>
+                {/* ── Columna izquierda: Resumen del servicio ── */}
+                <div className="pay-summary-col">
+                    <button className="pay-back-btn" onClick={() => navigate(-1)}>
+                        ← Volver
+                    </button>
 
-                    <p style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '20px', lineHeight: '1.4' }}>
-                        * Al hacer clic en pagar, aceptas los términos de Mechin. El pago es procesado de forma segura y garantizada.
-                    </p>
-                </div>
+                    <p className="pay-eyebrow">Resumen del servicio</p>
+                    <h2 className="pay-title">Confirmar pago</h2>
+                    <p className="pay-sub">Revisa los detalles antes de proceder.</p>
 
-                {/* Columna Derecha: Métodos */}
-                <div className="methods-section">
-                    <div className="summary-title">Método de Pago</div>
-
-                    {error && <div className="pay-error">⚠️ {error}</div>}
-
-                    {methods.map(method => (
-                        <div 
-                            key={method.id} 
-                            className={`method-card ${selectedMethod === method.id ? 'selected' : ''}`}
-                            onClick={() => setSelectedMethod(method.id)}
-                        >
-                            <div className="method-icon">{method.icon}</div>
-                            <div className="method-info">
-                                <h4>{method.name}</h4>
-                                <p>{method.desc}</p>
+                    <div className="pay-service-card">
+                        <div className="psc-header">
+                            <div className="psc-icon">🔧</div>
+                            <div>
+                                <div className="psc-tipo">{servicio.tipo_servicio}</div>
+                                <div className="psc-estado">
+                                    <span className="estado-dot"></span>
+                                    {servicio.estado?.replace('_', ' ').toUpperCase()}
+                                </div>
                             </div>
                         </div>
-                    ))}
 
-                    <button 
-                        className="btn-pay" 
-                        onClick={handlePayment} 
-                        disabled={isLoading}
-                    >
-                        {isLoading ? 'Procesando...' : `Pagar $${serviceData.precio_estimado.toLocaleString('es-CO')}`}
-                    </button>
+                        <div className="psc-rows">
+                            <div className="psc-row">
+                                <span>📍 Dirección</span>
+                                <span>{servicio.direccion_servicio}</span>
+                            </div>
+                            {servicio.mecanico_nombre && (
+                                <div className="psc-row">
+                                    <span>🧑‍🔧 Mecánico</span>
+                                    <span>{servicio.mecanico_nombre}</span>
+                                </div>
+                            )}
+                            <div className="psc-row">
+                                <span>📋 Descripción</span>
+                                <span className="psc-desc">{servicio.descripcion}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Desglose del costo */}
+                    <div className="pay-breakdown">
+                        <div className="breakdown-title">Desglose del pago</div>
+                        <div className="breakdown-row">
+                            <span>Subtotal del servicio</span>
+                            <span>${montoNum.toLocaleString('es-CO')}</span>
+                        </div>
+                        <div className="breakdown-row muted">
+                            <span>Comisión plataforma (15%)</span>
+                            <span>−${comision.toLocaleString('es-CO')}</span>
+                        </div>
+                        <div className="breakdown-row ok">
+                            <span>Pago al mecánico (85%)</span>
+                            <span>${montoMecanico.toLocaleString('es-CO')}</span>
+                        </div>
+                        <div className="breakdown-divider"></div>
+                        <div className="breakdown-row total">
+                            <span>Total a pagar</span>
+                            <span>${montoNum.toLocaleString('es-CO')}</span>
+                        </div>
+                    </div>
                 </div>
+
+                {/* ── Columna derecha: Formulario de pago ── */}
+                <div className="pay-form-col">
+                    <div className="pay-form-card">
+                        <div className="pfc-header">
+                            <div className="pfc-logo-box">
+                                <svg viewBox="0 0 18 18" fill="none">
+                                    <circle cx="9" cy="6" r="3.5" fill="#ff6e2d" opacity=".9"/>
+                                    <path d="M1 17c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="#ff6e2d" strokeWidth="1.4" strokeLinecap="round"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div className="pfc-brand">ME<em>CH</em>IN</div>
+                                <div className="pfc-sub">Pago seguro</div>
+                            </div>
+                        </div>
+
+                        {/* Monto */}
+                        <div className="pf-group">
+                            <label className="pf-label">Monto del servicio (COP)</label>
+                            <div className="pf-amount-wrap">
+                                <span className="pf-currency">$</span>
+                                <input
+                                    type="number"
+                                    className="pf-amount-input"
+                                    placeholder="0"
+                                    value={monto}
+                                    onChange={(e) => setMonto(e.target.value)}
+                                    min="0"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Método de pago */}
+                        <div className="pf-group">
+                            <label className="pf-label">Método de pago</label>
+                            <div className="pf-metodos">
+                                {metodos.map((m) => (
+                                    <div
+                                        key={m.id}
+                                        className={`pf-metodo ${metodoPago === m.id ? 'selected' : ''}`}
+                                        onClick={() => setMetodoPago(m.id)}
+                                    >
+                                        <span className="pm-icon">{m.icon}</span>
+                                        <div className="pm-info">
+                                            <div className="pm-label">{m.label}</div>
+                                            <div className="pm-desc">{m.desc}</div>
+                                        </div>
+                                        <div className="pm-check">
+                                            {metodoPago === m.id ? '●' : '○'}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Error */}
+                        {error && (
+                            <div className="pf-error">
+                                <span>⚠️</span> {error}
+                            </div>
+                        )}
+
+                        {/* Info de seguridad */}
+                        <div className="pf-security-note">
+                            <span>🔒</span>
+                            <span>Tus datos están protegidos. Este es un pago simulado dentro de Mechin.</span>
+                        </div>
+
+                        {/* Botón de pago */}
+                        <button
+                            className="pay-btn-primary"
+                            onClick={handlePagar}
+                            disabled={loading}
+                        >
+                            {loading
+                                ? 'Procesando...'
+                                : `Pagar $${montoNum.toLocaleString('es-CO')} →`}
+                        </button>
+
+                        <button
+                            className="pay-btn-outline"
+                            onClick={() => navigate(-1)}
+                            disabled={loading}
+                        >
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+
             </div>
         </div>
     );
