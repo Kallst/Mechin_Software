@@ -2,10 +2,11 @@ const db = require('../../config/db');
 
 // ============================================================
 // Crear solicitud de servicio — POST /api/services
-// CORRECCIÓN: cliente_id viene del token (req.user.id), no del body
+// CORRECCIÓN 1: límite de 1 servicio activo por cliente
+// CORRECCIÓN 2: notificación al crear el servicio
 // ============================================================
 const createServiceRequest = async (req, res) => {
-    const cliente_id = req.user.id; // ← del JWT, no del body
+    const cliente_id = req.user.id;
     const { mecanico_id, tipo_servicio, descripcion, direccion_servicio, latitud_servicio, longitud_servicio, precio_estimado } = req.body;
 
     if (!tipo_servicio || !descripcion || !direccion_servicio) {
@@ -13,6 +14,22 @@ const createServiceRequest = async (req, res) => {
     }
 
     try {
+        // LÍMITE: verificar si el cliente ya tiene un servicio activo
+        const servicioActivo = await db.query(`
+            SELECT id FROM servicios
+            WHERE cliente_id = $1
+              AND estado IN ('pendiente', 'asignado', 'en_camino', 'en_progreso')
+            LIMIT 1
+        `, [cliente_id]);
+
+        if (servicioActivo.rows.length > 0) {
+            return res.status(409).json({
+                ok: false,
+                message: "Ya tienes un servicio activo. Espera a que finalice antes de solicitar otro."
+            });
+        }
+
+        // Crear el servicio
         const result = await db.query(`
             INSERT INTO servicios 
                 (cliente_id, mecanico_id, tipo_servicio, descripcion, direccion_servicio, latitud_servicio, longitud_servicio, precio_estimado, estado)
@@ -20,7 +37,30 @@ const createServiceRequest = async (req, res) => {
             RETURNING id
         `, [cliente_id, mecanico_id || null, tipo_servicio, descripcion, direccion_servicio, latitud_servicio || null, longitud_servicio || null, precio_estimado || null]);
 
-        res.status(201).json({ ok: true, message: "Servicio solicitado correctamente", serviceId: result.rows[0].id });
+        const serviceId = result.rows[0].id;
+
+        // NOTIFICACIÓN al cliente confirmando que su solicitud fue recibida
+        await db.query(`
+            INSERT INTO notificaciones (usuario_id, servicio_id, tipo, mensaje)
+            VALUES ($1, $2, 'solicitud_creada', $3)
+        `, [cliente_id, serviceId, `Tu solicitud de "${tipo_servicio}" fue enviada. Estamos buscando un mecánico.`]);
+
+        // NOTIFICACIÓN al mecánico si fue seleccionado directamente
+        if (mecanico_id) {
+            // Obtener usuario_id del mecánico desde su perfil
+            const mecanicoUser = await db.query(`
+                SELECT usuario_id FROM perfiles_mecanico WHERE id = $1
+            `, [mecanico_id]);
+
+            if (mecanicoUser.rows.length > 0) {
+                await db.query(`
+                    INSERT INTO notificaciones (usuario_id, servicio_id, tipo, mensaje)
+                    VALUES ($1, $2, 'nueva_solicitud', $3)
+                `, [mecanicoUser.rows[0].usuario_id, serviceId, `Tienes una nueva solicitud de servicio: "${tipo_servicio}".`]);
+            }
+        }
+
+        res.status(201).json({ ok: true, message: "Servicio solicitado correctamente", serviceId });
     } catch (error) {
         console.error("❌ Error createServiceRequest:", error);
         res.status(500).json({ ok: false, message: "Error al crear la solicitud" });
@@ -29,10 +69,9 @@ const createServiceRequest = async (req, res) => {
 
 // ============================================================
 // Conteo de servicios activos del cliente — GET /api/services/count
-// CORRECCIÓN: cliente_id viene del token, no de la URL
 // ============================================================
 const getActiveServicesCount = async (req, res) => {
-    const cliente_id = req.user.id; // ← del JWT
+    const cliente_id = req.user.id;
     try {
         const result = await db.query(`
             SELECT COUNT(*) FROM servicios 
@@ -48,10 +87,9 @@ const getActiveServicesCount = async (req, res) => {
 
 // ============================================================
 // Servicio activo del cliente — GET /api/services/active
-// NUEVO: ClientDashboard lo necesita para mostrar el estado en tiempo real
 // ============================================================
 const getActiveServiceForClient = async (req, res) => {
-    const cliente_id = req.user.id; // ← del JWT
+    const cliente_id = req.user.id;
     try {
         const result = await db.query(`
             SELECT 
@@ -63,7 +101,6 @@ const getActiveServiceForClient = async (req, res) => {
                 s.precio_estimado,
                 s.fecha_solicitud,
                 s.mecanico_id,
-                s.pago_id,
                 u.nombre_completo AS mecanico_nombre,
                 u.telefono AS mecanico_telefono
             FROM servicios s
@@ -75,9 +112,7 @@ const getActiveServiceForClient = async (req, res) => {
             LIMIT 1
         `, [cliente_id]);
 
-        if (result.rows.length === 0) {
-            return res.json({ ok: true, service: null });
-        }
+        if (result.rows.length === 0) return res.json({ ok: true, service: null });
         res.json({ ok: true, service: result.rows[0] });
     } catch (error) {
         console.error("❌ Error getActiveServiceForClient:", error);
@@ -87,14 +122,12 @@ const getActiveServiceForClient = async (req, res) => {
 
 // ============================================================
 // Cancelar servicio — PUT /api/services/cancel/:serviceId
-// NUEVO: ClientDashboard tiene botón de cancelar
 // ============================================================
 const cancelService = async (req, res) => {
     const { serviceId } = req.params;
     const cliente_id = req.user.id;
 
     try {
-        // Verificar que el servicio pertenece al cliente y está cancelable
         const check = await db.query(`
             SELECT id, estado FROM servicios 
             WHERE id = $1 AND cliente_id = $2
@@ -103,14 +136,11 @@ const cancelService = async (req, res) => {
         if (check.rows.length === 0) {
             return res.status(404).json({ ok: false, message: "Servicio no encontrado" });
         }
-
         if (check.rows[0].estado === 'finalizado') {
             return res.status(400).json({ ok: false, message: "No se puede cancelar un servicio finalizado" });
         }
 
-        await db.query(`
-            UPDATE servicios SET estado = 'cancelado' WHERE id = $1
-        `, [serviceId]);
+        await db.query(`UPDATE servicios SET estado = 'cancelado' WHERE id = $1`, [serviceId]);
 
         res.json({ ok: true, message: "Servicio cancelado" });
     } catch (error) {
@@ -121,8 +151,10 @@ const cancelService = async (req, res) => {
 
 // ============================================================
 // Solicitudes pendientes para mecánico — GET /api/services/mechanic/pending/:mecanicoId
+// CORRECCIÓN 3: incluye servicios con mecanico_id asignado al mecánico actual
 // ============================================================
 const getPendingRequestsForMechanic = async (req, res) => {
+    const { mecanicoId } = req.params;
     try {
         const result = await db.query(`
             SELECT 
@@ -138,9 +170,13 @@ const getPendingRequestsForMechanic = async (req, res) => {
             FROM servicios s
             JOIN usuarios u ON s.cliente_id = u.id
             WHERE s.estado = 'pendiente'
-              AND s.mecanico_id IS NULL
+              AND (
+                s.mecanico_id IS NULL          -- solicitudes abiertas para cualquier mecánico
+                OR s.mecanico_id = $1          -- solicitudes dirigidas específicamente a este mecánico
+              )
             ORDER BY s.fecha_solicitud ASC
-        `);
+        `, [mecanicoId]);
+
         res.json({ ok: true, requests: result.rows });
     } catch (error) {
         console.error("❌ Error getPendingRequestsForMechanic:", error);
@@ -183,6 +219,7 @@ const getActiveServiceForMechanic = async (req, res) => {
 
 // ============================================================
 // Aceptar servicio — PUT /api/services/accept/:serviceId
+// NOTIFICACIÓN al cliente cuando el mecánico acepta
 // ============================================================
 const acceptService = async (req, res) => {
     const { serviceId } = req.params;
@@ -192,18 +229,35 @@ const acceptService = async (req, res) => {
 
     try {
         const check = await db.query(
-            `SELECT id FROM servicios WHERE id = $1 AND estado = 'pendiente'`,
+            `SELECT id, cliente_id, tipo_servicio FROM servicios WHERE id = $1 AND estado = 'pendiente'`,
             [serviceId]
         );
         if (check.rows.length === 0) {
             return res.status(409).json({ ok: false, message: "El servicio ya no está disponible" });
         }
 
+        const { cliente_id, tipo_servicio } = check.rows[0];
+
         await db.query(`
             UPDATE servicios 
             SET mecanico_id = $1, estado = 'asignado', fecha_asignacion = NOW()
             WHERE id = $2
         `, [mechanicId, serviceId]);
+
+        // Notificación al cliente de que el mecánico aceptó
+        const mecanicoInfo = await db.query(`
+            SELECT u.nombre_completo 
+            FROM perfiles_mecanico pm
+            JOIN usuarios u ON pm.usuario_id = u.id
+            WHERE pm.id = $1
+        `, [mechanicId]);
+
+        const nombreMecanico = mecanicoInfo.rows[0]?.nombre_completo || 'Un mecánico';
+
+        await db.query(`
+            INSERT INTO notificaciones (usuario_id, servicio_id, tipo, mensaje)
+            VALUES ($1, $2, 'servicio_aceptado', $3)
+        `, [cliente_id, serviceId, `${nombreMecanico} aceptó tu solicitud de "${tipo_servicio}". ¡Ya va en camino!`]);
 
         res.json({ ok: true, message: "Servicio aceptado correctamente" });
     } catch (error) {
@@ -224,7 +278,7 @@ const rejectService = async (req, res) => {
 // ============================================================
 const updateServiceStatus = async (req, res) => {
     const { serviceId } = req.params;
-    const { status, mechanicUserId } = req.body;
+    const { status } = req.body;
 
     const estadosValidos = ['en_camino', 'en_progreso', 'finalizado', 'cancelado'];
     if (!estadosValidos.includes(status)) {
