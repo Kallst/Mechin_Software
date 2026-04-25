@@ -427,3 +427,21 @@ VALUES (
     (SELECT id FROM perfiles_mecanico WHERE usuario_id = (SELECT id FROM usuarios WHERE correo = 'juan.mecanico@email.com')), 
     (SELECT id FROM especialidades WHERE nombre = 'Mecánica general')
 );
+
+-- ============================================================
+-- MIGRACIÓN: Tabla de mensajes de chat
+-- Ejecutar en PostgreSQL una sola vez
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS chat_mensajes (
+    id              SERIAL PRIMARY KEY,
+    servicio_id     INT          NOT NULL REFERENCES servicios(id) ON DELETE CASCADE,
+    emisor_id       INT          NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    emisor_nombre   VARCHAR(150) NOT NULL,
+    texto           TEXT         NOT NULL,
+    enviado_en      TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_servicio ON chat_mensajes(servicio_id);
+CREATE INDEX IF NOT EXISTS idx_chat_emisor   ON chat_mensajes(emisor_id);
+CREATE INDEX IF NOT EXISTS idx_chat_tiempo   ON chat_mensajes(enviado_en);

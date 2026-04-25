@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ClientDashboard.css';
 import { useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import useGeolocation from '../../hooks/useGeolocation';
 import SolicitarModal from '../../components/SolicitarModal/SolicitarModal';
-import ChatWindow from '../../components/ChatWindow/ChatWindow'; // ✅ import agregado
+import ChatWindow from '../../components/ChatWindow/ChatWindow';
 import authService from '../../services/auth.service';
 
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
@@ -47,18 +48,19 @@ const ClientDashboard = () => {
     const navigate = useNavigate();
     const mapRef = useRef(null);
 
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [showDetail, setShowDetail] = useState(false);
-    const [userName, setUserName] = useState("Cargando...");
-    const [mechanics, setMechanics] = useState([]);
-    const [searchTerm, setSearchTerm] = useState("");
+    // ── Estado general ────────────────────────────────────────
+    const [isModalOpen, setIsModalOpen]       = useState(false);
+    const [showDetail, setShowDetail]         = useState(false);
+    const [userName, setUserName]             = useState("Cargando...");
+    const [mechanics, setMechanics]           = useState([]);
+    const [searchTerm, setSearchTerm]         = useState("");
     const [selectedMechanic, setSelectedMechanic] = useState(null);
-    const [apiError, setApiError] = useState('');
-    const [notifications, setNotifications] = useState([]);
-    const [showNotif, setShowNotif] = useState(false);
-    const [showChat, setShowChat] = useState(false);
-    const [activeService, setActiveService] = useState(null);
-    const [clientCoords] = useState({ lat: 5.067, lng: -75.517 });
+    const [apiError, setApiError]             = useState('');
+    const [notifications, setNotifications]   = useState([]);
+    const [showNotif, setShowNotif]           = useState(false);
+    const [showChat, setShowChat]             = useState(false);
+    const [activeService, setActiveService]   = useState(null);
+    const [clientCoords]                      = useState({ lat: 5.067, lng: -75.517 });
     const [stats, setStats] = useState({
         activos: 0,
         mecanicosCerca: 0,
@@ -66,8 +68,15 @@ const ClientDashboard = () => {
         rating: "4.8 ★"
     });
 
+    // ── Estado del chat (vive en el padre para sobrevivir cierres) ──
+    const [chatMessages, setChatMessages] = useState([]);
+    const [chatInput, setChatInput]       = useState('');
+    const socketRef                       = useRef(null);
+    // Guardamos el serviceId activo para detectar cambios de sala
+    const activeChatServiceId             = useRef(null);
+
     const currentUser = authService.getCurrentUser();
-    const clienteId = currentUser ? currentUser.id : null;
+    const clienteId   = currentUser ? currentUser.id : null;
 
     const getAuthHeaders = () => {
         const token = localStorage.getItem('token');
@@ -77,6 +86,94 @@ const ClientDashboard = () => {
         };
     };
 
+    // ── Socket: conectar una sola vez al montar el dashboard ─────
+    useEffect(() => {
+        socketRef.current = io('http://localhost:5000', {
+            transports: ['websocket']
+        });
+
+        socketRef.current.on('receive_message', (data) => {
+            setChatMessages((prev) => [...prev, data]);
+        });
+
+        return () => {
+            socketRef.current.disconnect();
+        };
+    }, []);
+
+    // ── Unirse a la sala cuando hay un servicio activo ───────────
+    // Se ejecuta cada vez que cambia el servicio activo.
+    // Si el servicio es el mismo que ya estaba en la sala, no hace nada.
+    useEffect(() => {
+        if (!activeService || !socketRef.current) return;
+
+        const newServiceId = activeService.id;
+
+        // Evitar unirse dos veces a la misma sala
+        if (activeChatServiceId.current === newServiceId) return;
+
+        activeChatServiceId.current = newServiceId;
+
+        // Unirse a la sala del servicio
+        if (socketRef.current.connected) {
+            socketRef.current.emit('join_chat', newServiceId);
+        } else {
+            socketRef.current.on('connect', () => {
+                socketRef.current.emit('join_chat', newServiceId);
+            });
+        }
+
+        // Limpiar mensajes anteriores y cargar historial del servicio
+        setChatMessages([]);
+        loadChatHistory(newServiceId);
+
+    }, [activeService?.id]);
+
+    // ── Cargar historial de mensajes desde BD ────────────────────
+    const loadChatHistory = async (serviceId) => {
+        try {
+            const response = await fetch(
+                `http://localhost:5000/api/chat/${serviceId}`,
+                { headers: getAuthHeaders() }
+            );
+            const data = await response.json();
+            if (data.ok && Array.isArray(data.messages)) {
+                // Normalizar al mismo formato que los mensajes en tiempo real
+                const formatted = data.messages.map((m) => ({
+                    id:         m.id,
+                    serviceId:  serviceId,
+                    senderId:   m.emisor_id,
+                    senderName: m.emisor_nombre,
+                    text:       m.texto,
+                    time:       new Date(m.enviado_en).toLocaleTimeString(
+                                    'es-CO', { hour: '2-digit', minute: '2-digit' }
+                                )
+                }));
+                setChatMessages(formatted);
+            }
+        } catch (err) {
+            console.error("Error cargando historial de chat:", err);
+        }
+    };
+
+    // ── Enviar mensaje ───────────────────────────────────────────
+    const sendChatMessage = () => {
+        if (!chatInput.trim() || !socketRef.current?.connected || !activeService) return;
+
+        const msgData = {
+            serviceId:  activeService.id,
+            senderId:   clienteId,
+            senderName: userName,
+            text:       chatInput,
+            // El tiempo definitivo lo devuelve el servidor tras guardar en BD
+            time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+        };
+
+        socketRef.current.emit('send_message', msgData);
+        setChatInput('');
+    };
+
+    // ── Mecánicos cercanos ───────────────────────────────────────
     const loadNearbyMechanics = useCallback(async () => {
         try {
             const url = `http://localhost:5000/api/mechanics/nearby?lat=${clientCoords.lat}&lng=${clientCoords.lng}`;
@@ -96,6 +193,7 @@ const ClientDashboard = () => {
         }
     }, [clientCoords.lat, clientCoords.lng]);
 
+    // ── Servicio activo ──────────────────────────────────────────
     const checkActiveService = useCallback(async () => {
         if (!clienteId) return;
         try {
@@ -109,6 +207,7 @@ const ClientDashboard = () => {
             } else {
                 setActiveService(null);
                 setShowChat(false);
+                activeChatServiceId.current = null;
             }
         } catch (error) {
             console.error("Error checking active service:", error);
@@ -116,7 +215,7 @@ const ClientDashboard = () => {
     }, [clienteId]);
 
     const filteredMechanics = mechanics.filter(mech => {
-        const nombre = mech.nombre_completo || mech.nombre || mech.name || "";
+        const nombre     = mech.nombre_completo || mech.nombre || mech.name || "";
         const especialidad = mech.especialidad || "";
         return nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
                especialidad.toLowerCase().includes(searchTerm.toLowerCase());
@@ -166,6 +265,25 @@ const ClientDashboard = () => {
         }
     };
 
+    useEffect(() => {
+        loadUserProfile();
+        loadActiveCount();
+        loadNearbyMechanics();
+        checkActiveService();
+        fetchNotifications();
+
+        const serviceInterval  = setInterval(checkActiveService,    10000);
+        const mechanicInterval = setInterval(loadNearbyMechanics,   60000);
+        const notifInterval    = setInterval(fetchNotifications,     20000);
+
+        return () => {
+            clearInterval(serviceInterval);
+            clearInterval(mechanicInterval);
+            clearInterval(notifInterval);
+        };
+    }, [loadNearbyMechanics, checkActiveService]);
+
+    // ── Handlers de UI ───────────────────────────────────────────
     const handleSelectMechanic = (mech) => {
         setSelectedMechanic(mech);
         setShowDetail(true);
@@ -193,6 +311,8 @@ const ClientDashboard = () => {
             if (result.ok) {
                 setActiveService(null);
                 setShowChat(false);
+                activeChatServiceId.current = null;
+                setChatMessages([]);
                 loadActiveCount();
             }
         } catch (error) {
@@ -204,37 +324,16 @@ const ClientDashboard = () => {
         navigate('/pagar', { state: { servicio: activeService } });
     };
 
-    useEffect(() => {
-        loadUserProfile();
-        loadActiveCount();
-        loadNearbyMechanics();
-        checkActiveService();
-        fetchNotifications();
-
-        const serviceInterval = setInterval(checkActiveService, 10000);
-        const mechanicInterval = setInterval(loadNearbyMechanics, 6000);
-        const notifInterval = setInterval(fetchNotifications, 20000);
-
-        return () => {
-            clearInterval(serviceInterval);
-            clearInterval(mechanicInterval);
-            clearInterval(notifInterval);
-        };
-    }, [loadNearbyMechanics, checkActiveService]);
-
     const handleFinalSubmit = async (datosSolicitud) => {
         setApiError('');
-        const targetMecanicoId = selectedMechanic?.mecanico_id || null;
-
         const payload = {
-            mecanico_id: targetMecanicoId,
-            tipo_servicio: datosSolicitud.tipo_servicio,
-            descripcion: datosSolicitud.descripcion,
+            mecanico_id:       selectedMechanic?.mecanico_id || null,
+            tipo_servicio:     datosSolicitud.tipo_servicio,
+            descripcion:       datosSolicitud.descripcion,
             direccion_servicio: datosSolicitud.direccion_servicio,
-            latitud_servicio: clientCoords.lat,
+            latitud_servicio:  clientCoords.lat,
             longitud_servicio: clientCoords.lng
         };
-
         try {
             const response = await fetch('http://localhost:5000/api/services', {
                 method: 'POST',
@@ -261,6 +360,7 @@ const ClientDashboard = () => {
         return name.substring(0, 2).toUpperCase();
     };
 
+    // ── Render ───────────────────────────────────────────────────
     return (
         <div className="shell">
             <div className="sidebar">
@@ -354,12 +454,14 @@ const ClientDashboard = () => {
                         </div>
                     )}
 
-                    {/* ✅ ChatWindow — se monta solo si hay servicio activo y el usuario abrió el chat */}
-                    {showChat && activeService && (
+                    {/* ChatWindow siempre montado si hay servicio, visible según showChat */}
+                    {activeService && showChat && (
                         <ChatWindow
-                            serviceId={activeService.id}
+                            messages={chatMessages}
+                            message={chatInput}
+                            onMessageChange={setChatInput}
+                            onSend={sendChatMessage}
                             userId={currentUser?.id}
-                            userName={userName}
                             onClose={() => setShowChat(false)}
                         />
                     )}

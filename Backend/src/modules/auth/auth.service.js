@@ -2,11 +2,6 @@ import axios from 'axios';
 
 const API_URL = 'http://localhost:5000/api/auth/';
 
-// Mapeo de roles: frontend → BD
-// Frontend usa: 'client', 'mechanic', 'store'
-// La BD usa:    'cliente', 'mecanico', 'tienda'
-// El backend ya hace esta conversión, pero lo dejamos documentado aquí
-
 class AuthService {
   register(userData) {
     return axios.post(API_URL + 'register', userData);
@@ -16,6 +11,11 @@ class AuthService {
     return axios.post(API_URL + 'login', { email, password })
       .then(response => {
         if (response.data.token) {
+          // Limpiar cualquier sesión anterior antes de guardar la nueva
+          // Esto evita que queden datos de otro usuario/rol en localStorage
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+
           localStorage.setItem('token', response.data.token);
           localStorage.setItem('user', JSON.stringify(response.data.user));
         }
@@ -43,6 +43,10 @@ class AuthService {
 
   getToken() {
     return localStorage.getItem('token');
+  }
+
+  isAuthenticated() {
+    return !!this.getToken();
   }
 }
 

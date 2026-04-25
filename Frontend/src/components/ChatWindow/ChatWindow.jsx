@@ -1,53 +1,32 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
+import React, { useEffect, useRef } from 'react';
 import './ChatWindow.css';
 
-const ChatWindow = ({ serviceId, userId, userName, onClose }) => {
-    const [message, setMessage] = useState('');
-    const [messages, setMessages] = useState([]);
+/**
+ * ChatWindow — componente de presentación puro.
+ *
+ * NO maneja estado de mensajes ni socket internamente.
+ * Ambos viven en el dashboard padre, por lo que sobreviven
+ * al cierre y reapertura del chat.
+ *
+ * Props:
+ *  - messages      : array de mensajes (estado del padre)
+ *  - message       : texto del input (estado del padre)
+ *  - onMessageChange : setter del input
+ *  - onSend        : función que ejecuta el envío
+ *  - userId        : id del usuario actual (para diferenciar sent/received)
+ *  - onClose       : función para cerrar el chat
+ */
+const ChatWindow = ({ messages, message, onMessageChange, onSend, userId, onClose }) => {
     const chatEndRef = useRef(null);
-    const socketRef = useRef(null); // ✅ socket vive dentro del componente
 
-    useEffect(() => {
-        // ✅ Se crea al montar el componente
-        socketRef.current = io('http://localhost:5000', {
-            transports: ['websocket']
-        });
-
-        // ✅ Espera a que el socket esté conectado antes de unirse a la sala
-        socketRef.current.on('connect', () => {
-            socketRef.current.emit('join_chat', serviceId);
-        });
-
-        // Escuchar mensajes entrantes
-        socketRef.current.on('receive_message', (data) => {
-            setMessages((prev) => [...prev, data]);
-        });
-
-        // ✅ Limpieza correcta: desconecta el socket al desmontar
-        return () => {
-            socketRef.current.disconnect();
-        };
-    }, [serviceId]);
-
-    // Auto-scroll al último mensaje
+    // Auto-scroll cada vez que llega un nuevo mensaje
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    const sendMessage = (e) => {
+    const handleSubmit = (e) => {
         e.preventDefault();
-        if (message.trim() && socketRef.current?.connected) {
-            const msgData = {
-                serviceId,
-                senderId: userId,
-                senderName: userName,
-                text: message,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            };
-            socketRef.current.emit('send_message', msgData);
-            setMessage('');
-        }
+        onSend();
     };
 
     return (
@@ -68,12 +47,18 @@ const ChatWindow = ({ serviceId, userId, userName, onClose }) => {
                 )}
                 {messages.map((m, i) => (
                     <div
-                        key={i}
-                        className={`message-wrapper ${m.senderId === userId ? 'sent' : 'received'}`}
+                        key={m.id || i}
+                        className={`message-wrapper ${
+                            (m.senderId ?? m.emisor_id) === userId ? 'sent' : 'received'
+                        }`}
                     >
                         <div className="message-bubble">
-                            {m.senderId !== userId && <small className="sender-name">{m.senderName}</small>}
-                            <p className="message-text">{m.text}</p>
+                            {(m.senderId ?? m.emisor_id) !== userId && (
+                                <small className="sender-name">
+                                    {m.senderName ?? m.emisor_nombre}
+                                </small>
+                            )}
+                            <p className="message-text">{m.text ?? m.texto}</p>
                             <span className="message-time">{m.time}</span>
                         </div>
                     </div>
@@ -81,11 +66,11 @@ const ChatWindow = ({ serviceId, userId, userName, onClose }) => {
                 <div ref={chatEndRef} />
             </div>
 
-            <form className="chat-input-area" onSubmit={sendMessage}>
+            <form className="chat-input-area" onSubmit={handleSubmit}>
                 <input
                     type="text"
                     value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    onChange={(e) => onMessageChange(e.target.value)}
                     placeholder="Escribe un mensaje..."
                 />
                 <button type="submit" className="chat-send-btn">
