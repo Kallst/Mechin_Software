@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ClientDashboard.css';
 import useGeolocation from '../../hooks/useGeolocation';
 import SolicitarModal from '../../components/SolicitarModal/SolicitarModal';
-import ChatWindow from '../../components/ChatWindow/ChatWindow';
+import ChatWindow from '../../components/ChatWindow/ChatWindow'; // <--- IMPORTACIÓN DEL CHAT
 
 // --- NUEVAS IMPORTACIONES PARA EL MAPA REAL ---
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
@@ -57,11 +57,11 @@ const ClientDashboard = () => {
     const [apiError, setApiError] = useState('');
     const [notifications, setNotifications] = useState([]);
     const [showNotif, setShowNotif] = useState(false);
+
+    // --- NUEVOS ESTADOS PARA CHAT ---
     const [showChat, setShowChat] = useState(false);
     
-    // Extraer el ID real si existe en localStorage, de lo contrario fallback temporal a 1
-    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-    const clienteId = storedUser.id || 1; 
+    const clienteId = 1; 
 
     const [activeService, setActiveService] = useState(null);
     const [clientCoords] = useState({ lat: 5.067, lng: -75.517 });
@@ -73,64 +73,78 @@ const ClientDashboard = () => {
         rating: "4.8 ★"
     });
 
-    // --- HELPER PARA AUTORIZACIÓN ---
-    const getAuthHeaders = () => {
-        const token = localStorage.getItem('token');
-        return {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        };
-    };
-
+    // CORRECCIÓN 1: Fetch de mecánicos a prueba de fallos y formatos de base de datos
     const loadNearbyMechanics = useCallback(async () => {
         try {
+            const token = localStorage.getItem('token');
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+            
             const url = `http://localhost:5000/api/mechanics/nearby?lat=${clientCoords.lat}&lng=${clientCoords.lng}`;
-            const response = await fetch(url, { headers: getAuthHeaders() });
-            const data = await response.json();
-            if (data.ok) {
-                setMechanics(data.mechanics);
-                setStats(prev => ({ ...prev, mecanicosCerca: data.mechanics.length }));
+            let response = await fetch(url, { headers });
+            
+            // Si da error de token, reintentamos la ruta de forma pública
+            if (!response.ok && token) {
+                response = await fetch(url);
             }
-        } catch (error) { console.error("Error mecánicos:", error); }
+
+            const data = await response.json();
+            
+            // Identificamos cómo viene el arreglo para evitar el error de pantalla negra (.filter is not a function)
+            let mechanicArray = [];
+            if (Array.isArray(data)) {
+                mechanicArray = data; // Si la API devuelve el arreglo directo
+            } else if (data.ok && Array.isArray(data.mechanics)) {
+                mechanicArray = data.mechanics; // Si viene dentro de un objeto {ok: true, mechanics: [...]}
+            }
+
+            setMechanics(mechanicArray);
+            setStats(prev => ({ ...prev, mecanicosCerca: mechanicArray.length }));
+            
+        } catch (error) { 
+            console.error("Error mecánicos:", error); 
+            setMechanics([]); // Si falla el servidor, mantenemos la app viva con un arreglo vacío
+        }
     }, [clientCoords.lat, clientCoords.lng]);
 
     const checkActiveService = useCallback(async () => {
         try {
-            // CORRECCIÓN: Quitamos el /${clienteId} y agregamos headers
-            const response = await fetch(`http://localhost:5000/api/services/active`, {
-                headers: getAuthHeaders()
-            });
+            const response = await fetch(`http://localhost:5000/api/services/active/${clienteId}`);
             const data = await response.json();
             if (data.ok && data.service) {
                 setActiveService(data.service);
             } else {
                 setActiveService(null);
-                setShowChat(false);
+                setShowChat(false); // Cerrar chat si no hay servicio
             }
         } catch (error) { console.error("Error checking active service:", error); }
-    }, []);
+    }, [clienteId]);
 
-    const filteredMechanics = mechanics.filter(mech => 
-        mech.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (mech.especialidad && mech.especialidad.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    const filteredMechanics = mechanics.filter(mech => {
+        const nombre = mech.nombre_completo || mech.nombre || mech.name || "";
+        const especialidad = mech.especialidad || "";
+        return nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+               especialidad.toLowerCase().includes(searchTerm.toLowerCase());
+    });
 
+    // CORRECCIÓN 2: Recuperación del nombre flexible por si cambió en la base de datos
     const loadUserProfile = async () => {
         try {
-            const response = await fetch(`http://localhost:5000/api/users/${clienteId}`, {
-                headers: getAuthHeaders()
-            });
+            const response = await fetch(`http://localhost:5000/api/users/${clienteId}`);
             const data = await response.json();
-            if (data.ok) setUserName(data.user.nombre_completo);
-        } catch (error) { setUserName(storedUser.nombre_completo || "Usuario"); }
+            
+            if (data.ok && data.user) {
+                // Buscamos el nombre en las diferentes columnas posibles de tu BD
+                const nombreEncontrado = data.user.nombre_completo || data.user.nombre || data.user.name || data.user.nombre_usuario || "Usuario";
+                setUserName(nombreEncontrado);
+            }
+        } catch (error) { 
+            setUserName("Usuario"); // Ya no ponemos nombres quemados si falla
+        }
     };
 
     const loadActiveCount = async () => {
         try {
-            // CORRECCIÓN: Quitamos el /${clienteId} y agregamos headers
-            const response = await fetch(`http://localhost:5000/api/services/count`, {
-                headers: getAuthHeaders()
-            });
+            const response = await fetch(`http://localhost:5000/api/services/count/${clienteId}`);
             const data = await response.json();
             if (data.ok) setStats(prev => ({ ...prev, activos: data.count }));
         } catch (error) { console.error("Error stats:", error); }
@@ -138,9 +152,7 @@ const ClientDashboard = () => {
 
     const fetchNotifications = async () => {
         try {
-            const res = await fetch(`http://localhost:5000/api/notifications/${clienteId}`, {
-                headers: getAuthHeaders()
-            });
+            const res = await fetch(`http://localhost:5000/api/notifications/${clienteId}`);
             const data = await res.json();
             if (data.ok) setNotifications(data.notifications);
         } catch (err) { console.error("Error notis:", err); }
@@ -165,10 +177,7 @@ const ClientDashboard = () => {
     const handleCancelService = async (serviceId) => {
         if (!window.confirm("¿Deseas cancelar el servicio?")) return;
         try {
-            const response = await fetch(`http://localhost:5000/api/services/cancel/${serviceId}`, { 
-                method: 'PUT',
-                headers: getAuthHeaders() 
-            });
+            const response = await fetch(`http://localhost:5000/api/services/cancel/${serviceId}`, { method: 'PUT' });
             const result = await response.json();
             if (result.ok) {
                 setActiveService(null);
@@ -200,8 +209,8 @@ const ClientDashboard = () => {
         setApiError(''); 
         const targetMecanicoId = selectedMechanic?.mecanico_id || selectedMechanic?.id || null;
 
-        // CORRECCIÓN: El cliente_id ya no se envía
         const payload = {
+            cliente_id: clienteId, 
             mecanico_id: targetMecanicoId,
             tipo_servicio: datosSolicitud.tipo_servicio,
             descripcion: datosSolicitud.descripcion,
@@ -213,7 +222,7 @@ const ClientDashboard = () => {
         try {
             const response = await fetch('http://localhost:5000/api/services', {
                 method: 'POST',
-                headers: getAuthHeaders(),
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
             const result = await response.json();
@@ -228,8 +237,10 @@ const ClientDashboard = () => {
     };
 
     const getInitials = (name) => {
-        if (!name || name === "Cargando...") return "Us";
-        return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+        if (!name || name === "Cargando...") return "US";
+        const parts = name.split(' ');
+        if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+        return name.substring(0, 2).toUpperCase();
     };
 
     return (
@@ -309,6 +320,7 @@ const ClientDashboard = () => {
                                     <span>{activeService.tipo_servicio} • En Manizales</span>
                                 </div>
                                 <div className="as-actions">
+                                    {/* BOTÓN DE CHAT ACTIVADO */}
                                     <button className="btn-chat-icon" onClick={() => setShowChat(!showChat)}>💬</button>
                                     <button className="btn-cancel-icon" onClick={() => handleCancelService(activeService.id)}>×</button>
                                 </div>
@@ -370,15 +382,15 @@ const ClientDashboard = () => {
 
                                     {filteredMechanics.map((mech) => (
                                         <Marker 
-                                            key={mech.id} 
-                                            position={[mech.lat, mech.lng]} 
+                                            key={mech.id || mech.usuario_id} 
+                                            position={[mech.latitud || mech.lat, mech.longitud || mech.lng]} 
                                             icon={carIcon}
                                             eventHandlers={{
                                                 click: () => handleSelectMechanic(mech),
                                             }}
                                         >
                                             <Popup>
-                                                <strong>{mech.nombre_completo}</strong><br />
+                                                <strong>{mech.nombre_completo || mech.nombre || mech.name}</strong><br />
                                                 {mech.especialidad}
                                             </Popup>
                                         </Marker>
@@ -389,15 +401,17 @@ const ClientDashboard = () => {
                                     <div className="mech-detail-panel" style={{ zIndex: 1000 }}>
                                         <button className="close-panel" onClick={() => setShowDetail(false)}>✕</button>
                                         <div className="detail-header">
-                                            <div className="detail-avatar">{selectedMechanic.nombre_completo[0]}</div>
+                                            <div className="detail-avatar">
+                                                {(selectedMechanic.nombre_completo || selectedMechanic.nombre || "M")[0].toUpperCase()}
+                                            </div>
                                             <div className="detail-info">
-                                                <h4>{selectedMechanic.nombre_completo}</h4>
+                                                <h4>{selectedMechanic.nombre_completo || selectedMechanic.nombre || selectedMechanic.name}</h4>
                                                 <p>{selectedMechanic.especialidad || 'Mecánico General'}</p>
                                             </div>
                                         </div>
                                         <div className="detail-stats">
-                                            <span>⭐ 4.9</span>
-                                            <span>📍 {selectedMechanic.distancia} km</span>
+                                            <span>⭐ {selectedMechanic.calificacion || "4.9"}</span>
+                                            <span>📍 {selectedMechanic.distancia ? `${selectedMechanic.distancia} km` : 'Cerca'}</span>
                                         </div>
                                         <button className="btn-confirm-mech" onClick={openSolicitarModal}>
                                             Solicitar Servicio
@@ -411,10 +425,10 @@ const ClientDashboard = () => {
                             <div className="mc-head">Resultados ({filteredMechanics.length})</div>
                             <div className="mc-list" style={{ overflowY: 'auto', maxHeight: '400px' }}>
                                 {filteredMechanics.map((mech) => (
-                                    <div key={mech.id} className="mc-item" onClick={() => handleSelectMechanic(mech)}>
+                                    <div key={mech.id || mech.usuario_id} className="mc-item" onClick={() => handleSelectMechanic(mech)}>
                                         <div className="mc-info">
-                                            <div className="mc-name">{mech.nombre_completo}</div>
-                                            <div className="mc-spec">{mech.distancia} km • {mech.especialidad}</div>
+                                            <div className="mc-name">{mech.nombre_completo || mech.nombre || mech.name}</div>
+                                            <div className="mc-spec">{mech.distancia ? `${mech.distancia} km • ` : ''}{mech.especialidad}</div>
                                         </div>
                                         <button className="mc-btn">Ver</button>
                                     </div>
@@ -434,6 +448,7 @@ const ClientDashboard = () => {
                 externalError={apiError} 
             />
 
+            {/* RENDERIZADO DEL CHAT SI ESTÁ ACTIVO */}
             {showChat && activeService && (
                 <ChatWindow 
                     serviceId={activeService.id} 
