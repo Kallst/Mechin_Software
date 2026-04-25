@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ClientDashboard.css';
 import useGeolocation from '../../hooks/useGeolocation';
 import SolicitarModal from '../../components/SolicitarModal/SolicitarModal';
-import ChatWindow from '../../components/ChatWindow/ChatWindow'; // <--- IMPORTACIÓN DEL CHAT
+import authService from '../../services/auth.service';
 
 // --- NUEVAS IMPORTACIONES PARA EL MAPA REAL ---
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
@@ -61,7 +61,9 @@ const ClientDashboard = () => {
     // --- NUEVOS ESTADOS PARA CHAT ---
     const [showChat, setShowChat] = useState(false);
     
-    const clienteId = 1; 
+    // Obtener el ID del cliente real desde la sesión
+    const currentUser = authService.getCurrentUser();
+    const clienteId = currentUser ? currentUser.id : 1;
 
     const [activeService, setActiveService] = useState(null);
     const [clientCoords] = useState({ lat: 5.067, lng: -75.517 });
