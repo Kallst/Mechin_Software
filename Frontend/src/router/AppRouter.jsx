@@ -19,7 +19,8 @@ import CatalogPage    from '../pages/catalog/CatalogPage';
 import RepuestoDetail from '../pages/catalog/RepuestoDetail';
 
 // Pagos
-import PaymentPage from '../pages/payments/PaymentPage';
+import PaymentPage        from '../pages/payments/PaymentPage';
+import PaymentHistoryPage from '../pages/payments/PaymentHistoryPage';
 
 const AppRouter = () => {
   return (
@@ -32,7 +33,7 @@ const AppRouter = () => {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/verify-code"     element={<VerifyCodePage />} />
 
-      {/* ── Catálogo de repuestos (accesible para cliente y tienda) ── */}
+      {/* ── Catálogo de repuestos ─────────────────────── */}
       <Route
         path="/catalogo"
         element={
@@ -68,7 +69,7 @@ const AppRouter = () => {
         }
       />
       <Route
-        path="/dashboard/tienda"  // ← Sprint 6
+        path="/dashboard/tienda"
         element={
           <ProtectedRoute allowedRoles={['tienda']}>
             <StoreDashboard />
@@ -94,6 +95,16 @@ const AppRouter = () => {
         }
       />
 
+      {/* ── Historial de pagos ───────────────────────── */}
+      <Route
+        path="/historial-pagos"
+        element={
+          <ProtectedRoute allowedRoles={['cliente']}>
+            <PaymentHistoryPage />
+          </ProtectedRoute>
+        }
+      />
+
       {/* ── Ruta genérica /dashboard — redirige según rol ── */}
       <Route
         path="/dashboard"
@@ -111,10 +122,8 @@ const AppRouter = () => {
   );
 };
 
-// Redirige al dashboard correcto según el rol del usuario logueado
 const DashboardRedirect = () => {
   let user = null;
-
   try {
     const raw = localStorage.getItem('user');
     user = raw ? JSON.parse(raw) : null;
@@ -126,19 +135,15 @@ const DashboardRedirect = () => {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  const rol = user.role;
-
   const destinos = {
     cliente:       '/dashboard/cliente',
     mecanico:      '/dashboard/mecanico',
-    tienda:        '/dashboard/tienda',  // ← Sprint 6
+    tienda:        '/dashboard/tienda',
     administrador: '/dashboard/admin',
   };
 
-  const destino = destinos[rol];
-
+  const destino = destinos[user.role];
   if (!destino) {
-    console.warn(`[DashboardRedirect] Rol desconocido: "${rol}". Cerrando sesión.`);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     return <Navigate to="/login" replace />;

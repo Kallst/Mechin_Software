@@ -48,19 +48,18 @@ const ClientDashboard = () => {
     const navigate = useNavigate();
     const mapRef = useRef(null);
 
-    // ── Estado general ────────────────────────────────────────
-    const [isModalOpen, setIsModalOpen]       = useState(false);
-    const [showDetail, setShowDetail]         = useState(false);
-    const [userName, setUserName]             = useState("Cargando...");
-    const [mechanics, setMechanics]           = useState([]);
-    const [searchTerm, setSearchTerm]         = useState("");
+    const [isModalOpen, setIsModalOpen]           = useState(false);
+    const [showDetail, setShowDetail]             = useState(false);
+    const [userName, setUserName]                 = useState("Cargando...");
+    const [mechanics, setMechanics]               = useState([]);
+    const [searchTerm, setSearchTerm]             = useState("");
     const [selectedMechanic, setSelectedMechanic] = useState(null);
-    const [apiError, setApiError]             = useState('');
-    const [notifications, setNotifications]   = useState([]);
-    const [showNotif, setShowNotif]           = useState(false);
-    const [showChat, setShowChat]             = useState(false);
-    const [activeService, setActiveService]   = useState(null);
-    const [clientCoords]                      = useState({ lat: 5.067, lng: -75.517 });
+    const [apiError, setApiError]                 = useState('');
+    const [notifications, setNotifications]       = useState([]);
+    const [showNotif, setShowNotif]               = useState(false);
+    const [showChat, setShowChat]                 = useState(false);
+    const [activeService, setActiveService]       = useState(null);
+    const [clientCoords]                          = useState({ lat: 5.067, lng: -75.517 });
     const [stats, setStats] = useState({
         activos: 0,
         mecanicosCerca: 0,
@@ -68,7 +67,6 @@ const ClientDashboard = () => {
         rating: "4.8 ★"
     });
 
-    // ── Estado del chat (vive en el padre para sobrevivir cierres) ──
     const [chatMessages, setChatMessages] = useState([]);
     const [chatInput, setChatInput]       = useState('');
     const socketRef                       = useRef(null);
@@ -85,31 +83,19 @@ const ClientDashboard = () => {
         };
     };
 
-    // ── Socket: conectar una sola vez al montar el dashboard ─────
     useEffect(() => {
-        socketRef.current = io('http://localhost:5000', {
-            transports: ['websocket']
-        });
-
+        socketRef.current = io('http://localhost:5000', { transports: ['websocket'] });
         socketRef.current.on('receive_message', (data) => {
             setChatMessages((prev) => [...prev, data]);
         });
-
-        return () => {
-            socketRef.current.disconnect();
-        };
+        return () => { socketRef.current.disconnect(); };
     }, []);
 
-    // ── Unirse a la sala cuando hay un servicio activo ───────────
     useEffect(() => {
         if (!activeService || !socketRef.current) return;
-
         const newServiceId = activeService.id;
-
         if (activeChatServiceId.current === newServiceId) return;
-
         activeChatServiceId.current = newServiceId;
-
         if (socketRef.current.connected) {
             socketRef.current.emit('join_chat', newServiceId);
         } else {
@@ -117,13 +103,10 @@ const ClientDashboard = () => {
                 socketRef.current.emit('join_chat', newServiceId);
             });
         }
-
         setChatMessages([]);
         loadChatHistory(newServiceId);
-
     }, [activeService?.id]);
 
-    // ── Cargar historial de mensajes desde BD ────────────────────
     const loadChatHistory = async (serviceId) => {
         try {
             const response = await fetch(
@@ -138,9 +121,7 @@ const ClientDashboard = () => {
                     senderId:   m.emisor_id,
                     senderName: m.emisor_nombre,
                     text:       m.texto,
-                    time:       new Date(m.enviado_en).toLocaleTimeString(
-                                    'es-CO', { hour: '2-digit', minute: '2-digit' }
-                                )
+                    time:       new Date(m.enviado_en).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
                 }));
                 setChatMessages(formatted);
             }
@@ -149,34 +130,27 @@ const ClientDashboard = () => {
         }
     };
 
-    // ── Enviar mensaje ───────────────────────────────────────────
     const sendChatMessage = () => {
         if (!chatInput.trim() || !socketRef.current?.connected || !activeService) return;
-
         const msgData = {
             serviceId:  activeService.id,
             senderId:   clienteId,
             senderName: userName,
             text:       chatInput,
-            time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+            time:       new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
         };
-
         socketRef.current.emit('send_message', msgData);
         setChatInput('');
     };
 
-    // ── Mecánicos cercanos ───────────────────────────────────────
     const loadNearbyMechanics = useCallback(async () => {
         try {
             const url = `http://localhost:5000/api/mechanics/nearby?lat=${clientCoords.lat}&lng=${clientCoords.lng}`;
             const response = await fetch(url, { headers: getAuthHeaders() });
             const data = await response.json();
             let mechanicArray = [];
-            if (Array.isArray(data)) {
-                mechanicArray = data;
-            } else if (data.ok && Array.isArray(data.mechanics)) {
-                mechanicArray = data.mechanics;
-            }
+            if (Array.isArray(data)) mechanicArray = data;
+            else if (data.ok && Array.isArray(data.mechanics)) mechanicArray = data.mechanics;
             setMechanics(mechanicArray);
             setStats(prev => ({ ...prev, mecanicosCerca: mechanicArray.length }));
         } catch (error) {
@@ -185,7 +159,6 @@ const ClientDashboard = () => {
         }
     }, [clientCoords.lat, clientCoords.lng]);
 
-    // ── Servicio activo ──────────────────────────────────────────
     const checkActiveService = useCallback(async () => {
         if (!clienteId) return;
         try {
@@ -216,45 +189,28 @@ const ClientDashboard = () => {
     const loadUserProfile = async () => {
         if (!clienteId) return;
         try {
-            const response = await fetch(
-                `http://localhost:5000/api/users/${clienteId}`,
-                { headers: getAuthHeaders() }
-            );
+            const response = await fetch(`http://localhost:5000/api/users/${clienteId}`, { headers: getAuthHeaders() });
             const data = await response.json();
-            if (data.ok && data.user) {
-                setUserName(data.user.nombre_completo || data.user.nombre || "Usuario");
-            }
-        } catch (error) {
-            setUserName("Usuario");
-        }
+            if (data.ok && data.user) setUserName(data.user.nombre_completo || data.user.nombre || "Usuario");
+        } catch { setUserName("Usuario"); }
     };
 
     const loadActiveCount = async () => {
         if (!clienteId) return;
         try {
-            const response = await fetch(
-                `http://localhost:5000/api/services/count`,
-                { headers: getAuthHeaders() }
-            );
+            const response = await fetch(`http://localhost:5000/api/services/count`, { headers: getAuthHeaders() });
             const data = await response.json();
             if (data.ok) setStats(prev => ({ ...prev, activos: data.count }));
-        } catch (error) {
-            console.error("Error stats:", error);
-        }
+        } catch (error) { console.error("Error stats:", error); }
     };
 
     const fetchNotifications = async () => {
         if (!clienteId) return;
         try {
-            const res = await fetch(
-                `http://localhost:5000/api/notifications/${clienteId}`,
-                { headers: getAuthHeaders() }
-            );
+            const res = await fetch(`http://localhost:5000/api/notifications/${clienteId}`, { headers: getAuthHeaders() });
             const data = await res.json();
             if (data.ok) setNotifications(data.notifications);
-        } catch (err) {
-            console.error("Error notis:", err);
-        }
+        } catch (err) { console.error("Error notis:", err); }
     };
 
     useEffect(() => {
@@ -264,9 +220,9 @@ const ClientDashboard = () => {
         checkActiveService();
         fetchNotifications();
 
-        const serviceInterval  = setInterval(checkActiveService,    10000);
-        const mechanicInterval = setInterval(loadNearbyMechanics,   60000);
-        const notifInterval    = setInterval(fetchNotifications,     20000);
+        const serviceInterval  = setInterval(checkActiveService,  10000);
+        const mechanicInterval = setInterval(loadNearbyMechanics, 60000);
+        const notifInterval    = setInterval(fetchNotifications,   20000);
 
         return () => {
             clearInterval(serviceInterval);
@@ -275,22 +231,9 @@ const ClientDashboard = () => {
         };
     }, [loadNearbyMechanics, checkActiveService]);
 
-    // ── Handlers de UI ───────────────────────────────────────────
-    const handleSelectMechanic = (mech) => {
-        setSelectedMechanic(mech);
-        setShowDetail(true);
-    };
-
-    const openSolicitarModal = () => {
-        setShowDetail(false);
-        setIsModalOpen(true);
-    };
-
-    const closeSolicitarModal = () => {
-        setIsModalOpen(false);
-        setSelectedMechanic(null);
-        setApiError('');
-    };
+    const handleSelectMechanic = (mech) => { setSelectedMechanic(mech); setShowDetail(true); };
+    const openSolicitarModal   = () => { setShowDetail(false); setIsModalOpen(true); };
+    const closeSolicitarModal  = () => { setIsModalOpen(false); setSelectedMechanic(null); setApiError(''); };
 
     const handleCancelService = async (serviceId) => {
         if (!window.confirm("¿Deseas cancelar el servicio?")) return;
@@ -307,14 +250,10 @@ const ClientDashboard = () => {
                 setChatMessages([]);
                 loadActiveCount();
             }
-        } catch (error) {
-            console.error("Error al cancelar:", error);
-        }
+        } catch (error) { console.error("Error al cancelar:", error); }
     };
 
-    const handleIrAPagar = () => {
-        navigate('/pagar', { state: { servicio: activeService } });
-    };
+    const handleIrAPagar = () => navigate('/pagar', { state: { servicio: activeService } });
 
     const handleFinalSubmit = async (datosSolicitud) => {
         setApiError('');
@@ -340,9 +279,7 @@ const ClientDashboard = () => {
             } else {
                 setApiError(result.message || "No se pudo procesar la solicitud.");
             }
-        } catch (error) {
-            setApiError("Error de conexión.");
-        }
+        } catch (error) { setApiError("Error de conexión."); }
     };
 
     const getInitials = (name) => {
@@ -352,7 +289,6 @@ const ClientDashboard = () => {
         return name.substring(0, 2).toUpperCase();
     };
 
-    // ── Render ───────────────────────────────────────────────────
     return (
         <div className="shell">
             <div className="sidebar">
@@ -365,13 +301,16 @@ const ClientDashboard = () => {
                     </div>
                     <div className="sb-brand">ME<em>CH</em>IN</div>
                 </div>
+
                 <div className="sb-section">Principal</div>
                 <div className="sb-item active">Inicio</div>
-                <div className="sb-item">Buscar mecánicos</div>
-                {/* ── Sprint 6: Acceso al catálogo de repuestos ── */}
                 <div className="sb-item" onClick={() => navigate('/catalogo')} style={{ cursor: 'pointer' }}>
                     Catálogo de repuestos
                 </div>
+                <div className="sb-item" onClick={() => navigate('/historial-pagos')} style={{ cursor: 'pointer' }}>
+                    Mis pagos
+                </div>
+
                 <div className="sb-spacer"></div>
                 <div className="sb-user">
                     <div className="sb-avatar">{getInitials(userName)}</div>
