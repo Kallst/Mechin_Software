@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './MechanicDashboard.css';
 import { io } from 'socket.io-client';
+import { useNavigate } from 'react-router-dom';
 import authService from '../../services/auth.service';
 import ChatWindow from '../../components/ChatWindow/ChatWindow';
 
@@ -34,6 +35,8 @@ const MapControls = ({ centerPos, mapRef }) => {
 };
 
 const MechanicDashboard = () => {
+    const navigate = useNavigate();
+
     const [user, setUser]                       = useState(null);
     const [profile, setProfile]                 = useState(null);
     const [pendingRequests, setPendingRequests] = useState([]);
@@ -42,7 +45,6 @@ const MechanicDashboard = () => {
     const [showChat, setShowChat]               = useState(false);
     const mapRef = useRef(null);
 
-    // ── Estado del chat (vive en el padre para sobrevivir cierres) ──
     const [chatMessages, setChatMessages] = useState([]);
     const [chatInput, setChatInput]       = useState('');
     const socketRef                       = useRef(null);
@@ -65,30 +67,20 @@ const MechanicDashboard = () => {
         return name.substring(0, 2).toUpperCase();
     };
 
-    // ── Socket: conectar una sola vez al montar el dashboard ─────
+    // ── Socket ────────────────────────────────────────────────────
     useEffect(() => {
-        socketRef.current = io('http://localhost:5000', {
-            transports: ['websocket']
-        });
-
+        socketRef.current = io('http://localhost:5000', { transports: ['websocket'] });
         socketRef.current.on('receive_message', (data) => {
             setChatMessages((prev) => [...prev, data]);
         });
-
-        return () => {
-            socketRef.current.disconnect();
-        };
+        return () => { socketRef.current.disconnect(); };
     }, []);
 
-    // ── Unirse a la sala cuando hay un servicio activo ───────────
     useEffect(() => {
         if (!activeService || !socketRef.current) return;
-
         const newServiceId = activeService.id;
         if (activeChatServiceId.current === newServiceId) return;
-
         activeChatServiceId.current = newServiceId;
-
         if (socketRef.current.connected) {
             socketRef.current.emit('join_chat', newServiceId);
         } else {
@@ -96,13 +88,10 @@ const MechanicDashboard = () => {
                 socketRef.current.emit('join_chat', newServiceId);
             });
         }
-
         setChatMessages([]);
         loadChatHistory(newServiceId);
-
     }, [activeService?.id]);
 
-    // ── Cargar historial de mensajes desde BD ────────────────────
     const loadChatHistory = async (serviceId) => {
         try {
             const response = await fetch(
@@ -113,13 +102,11 @@ const MechanicDashboard = () => {
             if (data.ok && Array.isArray(data.messages)) {
                 const formatted = data.messages.map((m) => ({
                     id:         m.id,
-                    serviceId:  serviceId,
+                    serviceId,
                     senderId:   m.emisor_id,
                     senderName: m.emisor_nombre,
                     text:       m.texto,
-                    time:       new Date(m.enviado_en).toLocaleTimeString(
-                                    'es-CO', { hour: '2-digit', minute: '2-digit' }
-                                )
+                    time:       new Date(m.enviado_en).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
                 }));
                 setChatMessages(formatted);
             }
@@ -128,10 +115,8 @@ const MechanicDashboard = () => {
         }
     };
 
-    // ── Enviar mensaje ───────────────────────────────────────────
     const sendChatMessage = () => {
         if (!chatInput.trim() || !socketRef.current?.connected || !activeService) return;
-
         const msgData = {
             serviceId:  activeService.id,
             senderId:   user?.id,
@@ -139,18 +124,16 @@ const MechanicDashboard = () => {
             text:       chatInput,
             time:       new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
         };
-
         socketRef.current.emit('send_message', msgData);
         setChatInput('');
     };
 
-    // ── Cargar usuario ────────────────────────────────────────────
+    // ── Carga de datos ────────────────────────────────────────────
     useEffect(() => {
         const currentUser = authService.getCurrentUser();
         if (currentUser) setUser(currentUser);
     }, []);
 
-    // ── Cargar perfil ─────────────────────────────────────────────
     const loadProfile = useCallback(async () => {
         if (!user) return;
         try {
@@ -168,7 +151,6 @@ const MechanicDashboard = () => {
         }
     }, [user]);
 
-    // ── Solicitudes pendientes ────────────────────────────────────
     const fetchPendingRequests = useCallback(async () => {
         if (!profile) return;
         try {
@@ -183,7 +165,6 @@ const MechanicDashboard = () => {
         }
     }, [profile]);
 
-    // ── Servicio activo ───────────────────────────────────────────
     const fetchActiveService = useCallback(async () => {
         if (!profile) return;
         try {
@@ -224,11 +205,7 @@ const MechanicDashboard = () => {
         try {
             const response = await fetch(
                 `http://localhost:5000/api/mechanics/availability/${user.id}`,
-                {
-                    method: 'PUT',
-                    headers: authHeaders(),
-                    body: JSON.stringify({ disponible: newStatus })
-                }
+                { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ disponible: newStatus }) }
             );
             const data = await response.json();
             if (data.ok) setIsAvailable(newStatus);
@@ -241,17 +218,10 @@ const MechanicDashboard = () => {
         try {
             const response = await fetch(
                 `http://localhost:5000/api/services/accept/${serviceId}`,
-                {
-                    method: 'PUT',
-                    headers: authHeaders(),
-                    body: JSON.stringify({ mechanicId: profile.id })
-                }
+                { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ mechanicId: profile.id }) }
             );
             const data = await response.json();
-            if (data.ok) {
-                fetchPendingRequests();
-                fetchActiveService();
-            }
+            if (data.ok) { fetchPendingRequests(); fetchActiveService(); }
         } catch (error) {
             console.error("Error aceptando servicio:", error);
         }
@@ -275,11 +245,7 @@ const MechanicDashboard = () => {
         try {
             const response = await fetch(
                 `http://localhost:5000/api/services/status/${activeService.id}`,
-                {
-                    method: 'PUT',
-                    headers: authHeaders(),
-                    body: JSON.stringify({ status, mechanicUserId: user.id })
-                }
+                { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status, mechanicUserId: user.id }) }
             );
             const data = await response.json();
             if (data.ok) fetchActiveService();
@@ -290,7 +256,6 @@ const MechanicDashboard = () => {
 
     const estadoLabel = (estado) => estado?.replace(/_/g, ' ').toUpperCase();
 
-    // ── Render ────────────────────────────────────────────────────
     return (
         <div className="shell">
 
@@ -309,6 +274,9 @@ const MechanicDashboard = () => {
                 <div className="sb-section">Mecánico</div>
                 <div className="sb-item active">Panel de Solicitudes</div>
                 <div className="sb-item">Mi Perfil</div>
+                <div className="sb-item" onClick={() => navigate('/historial-ingresos')} style={{ cursor: 'pointer' }}>
+                    Historial de ingresos
+                </div>
 
                 <div className="sb-spacer"></div>
 
@@ -407,10 +375,7 @@ const MechanicDashboard = () => {
                                             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                                             attribution='&copy; OpenStreetMap'
                                         />
-                                        <MapControls
-                                            centerPos={[clientCoords.lat, clientCoords.lng]}
-                                            mapRef={mapRef}
-                                        />
+                                        <MapControls centerPos={[clientCoords.lat, clientCoords.lng]} mapRef={mapRef} />
                                         <Marker position={[clientCoords.lat, clientCoords.lng]} icon={clienteIcon}>
                                             <Popup>
                                                 <strong>{activeService.cliente_nombre}</strong><br />
@@ -424,12 +389,10 @@ const MechanicDashboard = () => {
                             <div className="mecanicos-card" style={{ flex: 1 }}>
                                 <div className="mc-head">Detalle del servicio</div>
                                 <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
-
                                     <div className="active-estado-badge">
                                         <span className="pulse-dot"></span>
                                         {estadoLabel(activeService.estado)}
                                     </div>
-
                                     <div className="service-detail-row">
                                         <span className="sd-label">Tipo</span>
                                         <span className="sd-val">{activeService.tipo_servicio}</span>
@@ -450,7 +413,6 @@ const MechanicDashboard = () => {
                                         <span className="sd-label">Descripción</span>
                                         <span className="sd-val">{activeService.descripcion}</span>
                                     </div>
-
                                     <div className="active-service-actions">
                                         {(activeService.estado === 'asignado' || activeService.estado === 'en_progreso') && (
                                             <button className="btn-action btn-camino" onClick={() => handleUpdateStatus('en_camino')}>
@@ -467,10 +429,7 @@ const MechanicDashboard = () => {
                                                 ✅ Terminar servicio
                                             </button>
                                         )}
-                                        <button
-                                            className="btn-action btn-chat-mech"
-                                            onClick={() => setShowChat(!showChat)}
-                                        >
+                                        <button className="btn-action btn-chat-mech" onClick={() => setShowChat(!showChat)}>
                                             💬 Chat con cliente
                                         </button>
                                     </div>
@@ -516,12 +475,8 @@ const MechanicDashboard = () => {
                                                 </div>
                                             </div>
                                             <div className="request-actions">
-                                                <button className="btn-accept" onClick={() => handleAcceptService(req.id)}>
-                                                    ✓ Aceptar
-                                                </button>
-                                                <button className="btn-reject" onClick={() => handleRejectService(req.id)}>
-                                                    ✕ Rechazar
-                                                </button>
+                                                <button className="btn-accept" onClick={() => handleAcceptService(req.id)}>✓ Aceptar</button>
+                                                <button className="btn-reject" onClick={() => handleRejectService(req.id)}>✕ Rechazar</button>
                                             </div>
                                         </div>
                                     ))}
@@ -533,7 +488,7 @@ const MechanicDashboard = () => {
                 </div>
             </div>
 
-            {/* ── CHAT (fuera del main para no afectar layout) ── */}
+            {/* ── CHAT ── */}
             {showChat && activeService && (
                 <ChatWindow
                     messages={chatMessages}

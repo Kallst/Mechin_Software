@@ -1,6 +1,5 @@
 // ============================================================
 // MECHIN — payments.controller.js
-// Capa HTTP: recibe requests, llama al service, responde
 // ============================================================
 
 const paymentsService = require('./payments.service');
@@ -20,48 +19,39 @@ const processPayment = async (req, res) => {
     }
 
     try {
-        const pago = await paymentsService.procesarPago({
-            servicio_id,
-            monto,
-            metodo_pago,
-            clienteId
-        });
-
-        res.status(201).json({
-            ok: true,
-            message: 'Pago procesado exitosamente',
-            pago
-        });
-
+        const pago = await paymentsService.procesarPago({ servicio_id, monto, metodo_pago, clienteId });
+        res.status(201).json({ ok: true, message: 'Pago procesado exitosamente', pago });
     } catch (error) {
         console.error('❌ Error al procesar pago:', error);
-        res.status(error.status || 500).json({
-            ok: false,
-            message: error.message || 'Error interno del servidor'
-        });
+        res.status(error.status || 500).json({ ok: false, message: error.message || 'Error interno del servidor' });
     }
 };
 
 // ============================================================
-// GET /api/payments/history
+// GET /api/payments/history — historial del cliente (MECHIN-61)
 // ============================================================
 const getPaymentHistory = async (req, res) => {
     const clienteId = req.user.id;
-
     try {
         const pagos = await paymentsService.obtenerHistorialPagos(clienteId);
-
-        res.json({
-            ok: true,
-            pagos
-        });
-
+        res.json({ ok: true, pagos });
     } catch (error) {
         console.error('❌ Error al obtener historial:', error);
-        res.status(500).json({
-            ok: false,
-            message: 'Error interno del servidor'
-        });
+        res.status(500).json({ ok: false, message: 'Error interno del servidor' });
+    }
+};
+
+// ============================================================
+// GET /api/payments/mechanic-history — historial de ingresos del mecánico (MECHIN-62)
+// ============================================================
+const getMechanicPaymentHistory = async (req, res) => {
+    const usuarioId = req.user.id;
+    try {
+        const pagos = await paymentsService.obtenerHistorialIngresosMecanico(usuarioId);
+        res.json({ ok: true, pagos });
+    } catch (error) {
+        console.error('❌ Error al obtener historial mecánico:', error);
+        res.status(error.status || 500).json({ ok: false, message: error.message || 'Error interno del servidor' });
     }
 };
 
@@ -71,29 +61,18 @@ const getPaymentHistory = async (req, res) => {
 const getPaymentBreakdown = async (req, res) => {
     const { pagoId } = req.params;
     const clienteId = req.user.id;
-
     try {
-        const resultado = await paymentsService.obtenerDesglosePago({
-            pagoId,
-            clienteId
-        });
-
-        res.json({
-            ok: true,
-            ...resultado
-        });
-
+        const resultado = await paymentsService.obtenerDesglosePago({ pagoId, clienteId });
+        res.json({ ok: true, ...resultado });
     } catch (error) {
         console.error('❌ Error al obtener desglose:', error);
-        res.status(error.status || 500).json({
-            ok: false,
-            message: error.message || 'Error interno del servidor'
-        });
+        res.status(error.status || 500).json({ ok: false, message: error.message || 'Error interno del servidor' });
     }
 };
 
 module.exports = {
     processPayment,
     getPaymentHistory,
+    getMechanicPaymentHistory,
     getPaymentBreakdown
 };

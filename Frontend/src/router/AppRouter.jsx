@@ -12,15 +12,16 @@ import VerifyCodePage     from '../pages/auth/VerifyCodePage';
 import ClientDashboard   from '../pages/dashboard/ClientDashboard';
 import MechanicDashboard from '../pages/dashboard/MechanicDashboard';
 import AdminDashboard    from '../pages/dashboard/AdminDashboard';
-import StoreDashboard    from '../pages/dashboard/StoreDashboard'; // ← Sprint 6
+import StoreDashboard    from '../pages/dashboard/StoreDashboard';
 
-// ── Sprint 6: Catálogo de Repuestos ──────────────────────────
+// Catálogo de Repuestos
 import CatalogPage    from '../pages/catalog/CatalogPage';
 import RepuestoDetail from '../pages/catalog/RepuestoDetail';
 
 // Pagos
-import PaymentPage        from '../pages/payments/PaymentPage';
-import PaymentHistoryPage from '../pages/payments/PaymentHistoryPage';
+import PaymentPage               from '../pages/payments/PaymentPage';
+import PaymentHistoryPage        from '../pages/payments/PaymentHistoryPage';
+import MechanicPaymentHistoryPage from '../pages/payments/MechanicPaymentHistoryPage';
 
 const AppRouter = () => {
   return (
@@ -51,7 +52,7 @@ const AppRouter = () => {
         }
       />
 
-      {/* ── Rutas protegidas por rol ─────────────────── */}
+      {/* ── Dashboards por rol ───────────────────────── */}
       <Route
         path="/dashboard/cliente"
         element={
@@ -85,7 +86,7 @@ const AppRouter = () => {
         }
       />
 
-      {/* ── Pago de servicio ─────────────────────────── */}
+      {/* ── Pagos ────────────────────────────────────── */}
       <Route
         path="/pagar"
         element={
@@ -94,13 +95,19 @@ const AppRouter = () => {
           </ProtectedRoute>
         }
       />
-
-      {/* ── Historial de pagos ───────────────────────── */}
       <Route
         path="/historial-pagos"
         element={
           <ProtectedRoute allowedRoles={['cliente']}>
             <PaymentHistoryPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/historial-ingresos"
+        element={
+          <ProtectedRoute allowedRoles={['mecanico']}>
+            <MechanicPaymentHistoryPage />
           </ProtectedRoute>
         }
       />
