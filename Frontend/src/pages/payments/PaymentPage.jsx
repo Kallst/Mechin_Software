@@ -142,7 +142,7 @@ const PaymentPage = () => {
         <div className="pay-shell">
             <div className="pay-layout">
 
-                {/* ── Columna izquierda: Resumen del servicio ── */}
+                {/* ──Columna izquierda: Resumen del servicio ── */}
                 <div className="pay-summary-col">
                     <button className="pay-back-btn" onClick={() => navigate(-1)}>
                         ← Volver
