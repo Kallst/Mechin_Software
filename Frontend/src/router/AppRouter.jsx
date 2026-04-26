@@ -13,6 +13,10 @@ import ClientDashboard   from '../pages/dashboard/ClientDashboard';
 import MechanicDashboard from '../pages/dashboard/MechanicDashboard';
 import AdminDashboard    from '../pages/dashboard/AdminDashboard';
 
+// ── Sprint 6: Catálogo de Repuestos ──────────────────────────
+import CatalogPage    from '../pages/catalog/CatalogPage';
+import RepuestoDetail from '../pages/catalog/RepuestoDetail';
+
 const AppRouter = () => {
   return (
     <Routes>
@@ -23,6 +27,24 @@ const AppRouter = () => {
       <Route path="/register"        element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/verify-code"     element={<VerifyCodePage />} />
+
+      {/* ── Catálogo de repuestos (accesible para cliente y tienda) ── */}
+      <Route
+        path="/catalogo"
+        element={
+          <ProtectedRoute allowedRoles={['cliente', 'tienda', 'administrador']}>
+            <CatalogPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/catalogo/:id"
+        element={
+          <ProtectedRoute allowedRoles={['cliente', 'tienda', 'administrador']}>
+            <RepuestoDetail />
+          </ProtectedRoute>
+        }
+      />
 
       {/* ── Rutas protegidas por rol ─────────────────── */}
       <Route
@@ -75,7 +97,6 @@ const DashboardRedirect = () => {
     const raw = localStorage.getItem('user');
     user = raw ? JSON.parse(raw) : null;
   } catch {
-    // localStorage corrompido — limpiar y mandar a login
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     return <Navigate to="/login" replace />;
@@ -83,20 +104,18 @@ const DashboardRedirect = () => {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  // El backend devuelve role en español: 'cliente', 'mecanico', 'tienda', 'administrador'
   const rol = user.role;
 
   const destinos = {
     cliente:       '/dashboard/cliente',
     mecanico:      '/dashboard/mecanico',
-    tienda:        '/dashboard/cliente',   // tienda usa vista cliente (Sprint 6)
+    tienda:        '/catalogo',          // tienda entra directo al catálogo
     administrador: '/dashboard/admin',
   };
 
   const destino = destinos[rol];
 
   if (!destino) {
-    // Rol desconocido o nulo — limpiar sesión y mandar a login
     console.warn(`[DashboardRedirect] Rol desconocido: "${rol}". Cerrando sesión.`);
     localStorage.removeItem('token');
     localStorage.removeItem('user');

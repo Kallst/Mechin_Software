@@ -16,6 +16,7 @@ const notificationRoutes = require('./src/modules/notifications/notifications.ro
 const paymentsRoutes     = require('./src/modules/payments/payments.routes');
 const chatRoutes         = require('./src/modules/chat/chat.routes'); // ← NUEVO
 const reputationRoutes = require('./src/modules/reputation/reputation.routes');
+const catalogRoutes = require('./src/modules/catalog/catalog.routes');
 
 const app    = express();
 const server = http.createServer(app);
@@ -40,6 +41,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/payments',      paymentsRoutes);
 app.use('/api/chat',          chatRoutes); // ← NUEVO
 app.use('/api/reputation',    reputationRoutes); // ← NUEVO
+app.use('/api/catalog', catalogRoutes);
 
 // --- LÓGICA DE CHAT (SOCKETS) ---
 io.on('connection', (socket) => {

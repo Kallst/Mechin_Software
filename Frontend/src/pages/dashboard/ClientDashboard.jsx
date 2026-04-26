@@ -72,7 +72,6 @@ const ClientDashboard = () => {
     const [chatMessages, setChatMessages] = useState([]);
     const [chatInput, setChatInput]       = useState('');
     const socketRef                       = useRef(null);
-    // Guardamos el serviceId activo para detectar cambios de sala
     const activeChatServiceId             = useRef(null);
 
     const currentUser = authService.getCurrentUser();
@@ -102,19 +101,15 @@ const ClientDashboard = () => {
     }, []);
 
     // ── Unirse a la sala cuando hay un servicio activo ───────────
-    // Se ejecuta cada vez que cambia el servicio activo.
-    // Si el servicio es el mismo que ya estaba en la sala, no hace nada.
     useEffect(() => {
         if (!activeService || !socketRef.current) return;
 
         const newServiceId = activeService.id;
 
-        // Evitar unirse dos veces a la misma sala
         if (activeChatServiceId.current === newServiceId) return;
 
         activeChatServiceId.current = newServiceId;
 
-        // Unirse a la sala del servicio
         if (socketRef.current.connected) {
             socketRef.current.emit('join_chat', newServiceId);
         } else {
@@ -123,7 +118,6 @@ const ClientDashboard = () => {
             });
         }
 
-        // Limpiar mensajes anteriores y cargar historial del servicio
         setChatMessages([]);
         loadChatHistory(newServiceId);
 
@@ -138,7 +132,6 @@ const ClientDashboard = () => {
             );
             const data = await response.json();
             if (data.ok && Array.isArray(data.messages)) {
-                // Normalizar al mismo formato que los mensajes en tiempo real
                 const formatted = data.messages.map((m) => ({
                     id:         m.id,
                     serviceId:  serviceId,
@@ -165,7 +158,6 @@ const ClientDashboard = () => {
             senderId:   clienteId,
             senderName: userName,
             text:       chatInput,
-            // El tiempo definitivo lo devuelve el servidor tras guardar en BD
             time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
         };
 
@@ -215,7 +207,7 @@ const ClientDashboard = () => {
     }, [clienteId]);
 
     const filteredMechanics = mechanics.filter(mech => {
-        const nombre     = mech.nombre_completo || mech.nombre || mech.name || "";
+        const nombre       = mech.nombre_completo || mech.nombre || mech.name || "";
         const especialidad = mech.especialidad || "";
         return nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
                especialidad.toLowerCase().includes(searchTerm.toLowerCase());
@@ -327,12 +319,12 @@ const ClientDashboard = () => {
     const handleFinalSubmit = async (datosSolicitud) => {
         setApiError('');
         const payload = {
-            mecanico_id:       selectedMechanic?.mecanico_id || null,
-            tipo_servicio:     datosSolicitud.tipo_servicio,
-            descripcion:       datosSolicitud.descripcion,
+            mecanico_id:        selectedMechanic?.mecanico_id || null,
+            tipo_servicio:      datosSolicitud.tipo_servicio,
+            descripcion:        datosSolicitud.descripcion,
             direccion_servicio: datosSolicitud.direccion_servicio,
-            latitud_servicio:  clientCoords.lat,
-            longitud_servicio: clientCoords.lng
+            latitud_servicio:   clientCoords.lat,
+            longitud_servicio:  clientCoords.lng
         };
         try {
             const response = await fetch('http://localhost:5000/api/services', {
@@ -376,6 +368,10 @@ const ClientDashboard = () => {
                 <div className="sb-section">Principal</div>
                 <div className="sb-item active">Inicio</div>
                 <div className="sb-item">Buscar mecánicos</div>
+                {/* ── Sprint 6: Acceso al catálogo de repuestos ── */}
+                <div className="sb-item" onClick={() => navigate('/catalogo')} style={{ cursor: 'pointer' }}>
+                    Catálogo de repuestos
+                </div>
                 <div className="sb-spacer"></div>
                 <div className="sb-user">
                     <div className="sb-avatar">{getInitials(userName)}</div>
@@ -454,7 +450,6 @@ const ClientDashboard = () => {
                         </div>
                     )}
 
-                    {/* ChatWindow siempre montado si hay servicio, visible según showChat */}
                     {activeService && showChat && (
                         <ChatWindow
                             messages={chatMessages}
