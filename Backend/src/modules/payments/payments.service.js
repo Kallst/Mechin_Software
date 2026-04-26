@@ -136,7 +136,7 @@ const obtenerHistorialPagos = async (clienteId) => {
     return result.rows;
 };
 
-// ============================================================
+// ===========================================================
 // Obtener desglose de un pago específico
 // ============================================================
 const obtenerDesglosePago = async ({ pagoId, clienteId }) => {
