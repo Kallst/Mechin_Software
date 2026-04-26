@@ -12,6 +12,7 @@ import VerifyCodePage     from '../pages/auth/VerifyCodePage';
 import ClientDashboard   from '../pages/dashboard/ClientDashboard';
 import MechanicDashboard from '../pages/dashboard/MechanicDashboard';
 import AdminDashboard    from '../pages/dashboard/AdminDashboard';
+import StoreDashboard    from '../pages/dashboard/StoreDashboard'; // ← Sprint 6
 
 // ── Sprint 6: Catálogo de Repuestos ──────────────────────────
 import CatalogPage    from '../pages/catalog/CatalogPage';
@@ -64,6 +65,14 @@ const AppRouter = () => {
         }
       />
       <Route
+        path="/dashboard/tienda"  // ← Sprint 6
+        element={
+          <ProtectedRoute allowedRoles={['tienda']}>
+            <StoreDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/dashboard/admin"
         element={
           <ProtectedRoute allowedRoles={['administrador']}>
@@ -109,7 +118,7 @@ const DashboardRedirect = () => {
   const destinos = {
     cliente:       '/dashboard/cliente',
     mecanico:      '/dashboard/mecanico',
-    tienda:        '/catalogo',          // tienda entra directo al catálogo
+    tienda:        '/dashboard/tienda',  // ← Sprint 6
     administrador: '/dashboard/admin',
   };
 
