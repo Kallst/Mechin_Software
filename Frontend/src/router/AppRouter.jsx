@@ -14,13 +14,17 @@ import MechanicDashboard from '../pages/dashboard/MechanicDashboard';
 import AdminDashboard    from '../pages/dashboard/AdminDashboard';
 import StoreDashboard    from '../pages/dashboard/StoreDashboard';
 
+// Perfil de Usuario
+import ProfilePage     from '../pages/profile/ProfilePage';
+import EditProfilePage from '../pages/profile/EditProfilePage';
+
 // Catálogo de Repuestos
 import CatalogPage    from '../pages/catalog/CatalogPage';
 import RepuestoDetail from '../pages/catalog/RepuestoDetail';
 
 // Pagos
-import PaymentPage               from '../pages/payments/PaymentPage';
-import PaymentHistoryPage        from '../pages/payments/PaymentHistoryPage';
+import PaymentPage                from '../pages/payments/PaymentPage';
+import PaymentHistoryPage         from '../pages/payments/PaymentHistoryPage';
 import MechanicPaymentHistoryPage from '../pages/payments/MechanicPaymentHistoryPage';
 
 const AppRouter = () => {
@@ -108,6 +112,24 @@ const AppRouter = () => {
         element={
           <ProtectedRoute allowedRoles={['mecanico']}>
             <MechanicPaymentHistoryPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ── Perfil de Usuario ────────────────────────── */}
+      <Route
+        path="/perfil"
+        element={
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/perfil/editar"
+        element={
+          <ProtectedRoute>
+            <EditProfilePage />
           </ProtectedRoute>
         }
       />

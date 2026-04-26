@@ -312,13 +312,20 @@ const ClientDashboard = () => {
                 </div>
 
                 <div className="sb-spacer"></div>
-                <div className="sb-user">
+                {/* ── AQUÍ SE MODIFICÓ: Envuelve el contenedor para navegar a /perfil ── */}
+                <div 
+                    className="sb-user" 
+                    onClick={() => navigate('/perfil')} 
+                    style={{ cursor: 'pointer' }} 
+                    title="Ir a mi perfil"
+                >
                     <div className="sb-avatar">{getInitials(userName)}</div>
                     <div>
                         <div className="sb-uname">{userName}</div>
                         <div className="sb-urole">Cliente</div>
                     </div>
                 </div>
+                {/* ─────────────────────────────────────────────────────────────────── */}
             </div>
 
             <div className="main">
