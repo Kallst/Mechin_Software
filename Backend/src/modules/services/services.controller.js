@@ -1,303 +1,314 @@
+// ============================================================
+// MECHIN — services.controller.js
+// Capa HTTP: recibe requests, llama al service, responde
+// ============================================================
+
 const db = require('../../config/db');
+const servicesService = require('./services.service');
 
 // ============================================================
-// Crear solicitud de servicio — POST /api/services
-// CORRECCIÓN 1: límite de 1 servicio activo por cliente
-// CORRECCIÓN 2: notificación al crear el servicio
+// MECHIN-23 — Crear solicitud de servicio (cliente)
+// POST /api/services
 // ============================================================
 const createServiceRequest = async (req, res) => {
-    const cliente_id = req.user.id;
-    const { mecanico_id, tipo_servicio, descripcion, direccion_servicio, latitud_servicio, longitud_servicio, precio_estimado } = req.body;
+    const clienteId = req.user.id;
 
-    if (!tipo_servicio || !descripcion || !direccion_servicio) {
-        return res.status(400).json({ ok: false, message: "Faltan campos obligatorios" });
+    const {
+        mecanico_id, tipo_servicio, descripcion,
+        direccion_servicio, latitud_servicio, longitud_servicio
+    } = req.body;
+
+    if (!tipo_servicio?.trim() || !descripcion?.trim() || !direccion_servicio?.trim()) {
+        return res.status(400).json({
+            ok: false,
+            message: 'Faltan datos obligatorios: tipo de servicio, descripción y dirección.'
+        });
+    }
+
+    if (descripcion.trim().length < 15) {
+        return res.status(400).json({
+            ok: false,
+            message: 'La descripción es muy corta. Explica mejor el problema (mínimo 15 caracteres).'
+        });
     }
 
     try {
-        // LÍMITE: verificar si el cliente ya tiene un servicio activo
-        const servicioActivo = await db.query(`
-            SELECT id FROM servicios
-            WHERE cliente_id = $1
-              AND estado IN ('pendiente', 'asignado', 'en_camino', 'en_progreso')
-            LIMIT 1
-        `, [cliente_id]);
-
-        if (servicioActivo.rows.length > 0) {
-            return res.status(409).json({
+        const hasActive = await servicesService.checkActiveService(clienteId);
+        if (hasActive) {
+            return res.status(400).json({
                 ok: false,
-                message: "Ya tienes un servicio activo. Espera a que finalice antes de solicitar otro."
+                message: 'Ya tienes una solicitud activa en el sistema.'
             });
         }
 
-        // Crear el servicio
-        const result = await db.query(`
-            INSERT INTO servicios 
-                (cliente_id, mecanico_id, tipo_servicio, descripcion, direccion_servicio, latitud_servicio, longitud_servicio, precio_estimado, estado)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pendiente')
-            RETURNING id
-        `, [cliente_id, mecanico_id || null, tipo_servicio, descripcion, direccion_servicio, latitud_servicio || null, longitud_servicio || null, precio_estimado || null]);
+        const newService = await servicesService.createService(
+            clienteId,
+            mecanico_id ? parseInt(mecanico_id) : null,
+            tipo_servicio,
+            descripcion,
+            direccion_servicio,
+            latitud_servicio || 5.067,
+            longitud_servicio || -75.517
+        );
 
-        const serviceId = result.rows[0].id;
-
-        // NOTIFICACIÓN al cliente confirmando que su solicitud fue recibida
-        await db.query(`
-            INSERT INTO notificaciones (usuario_id, servicio_id, tipo, mensaje)
-            VALUES ($1, $2, 'solicitud_creada', $3)
-        `, [cliente_id, serviceId, `Tu solicitud de "${tipo_servicio}" fue enviada. Estamos buscando un mecánico.`]);
-
-        // NOTIFICACIÓN al mecánico si fue seleccionado directamente
-        if (mecanico_id) {
-            // Obtener usuario_id del mecánico desde su perfil
-            const mecanicoUser = await db.query(`
-                SELECT usuario_id FROM perfiles_mecanico WHERE id = $1
-            `, [mecanico_id]);
-
-            if (mecanicoUser.rows.length > 0) {
-                await db.query(`
-                    INSERT INTO notificaciones (usuario_id, servicio_id, tipo, mensaje)
-                    VALUES ($1, $2, 'nueva_solicitud', $3)
-                `, [mecanicoUser.rows[0].usuario_id, serviceId, `Tienes una nueva solicitud de servicio: "${tipo_servicio}".`]);
-            }
-        }
-
-        res.status(201).json({ ok: true, message: "Servicio solicitado correctamente", serviceId });
+        res.status(201).json({ ok: true, data: newService });
     } catch (error) {
-        console.error("❌ Error createServiceRequest:", error);
-        res.status(500).json({ ok: false, message: "Error al crear la solicitud" });
+        console.error('❌ Error createServiceRequest:', error);
+        res.status(500).json({ ok: false, message: error.message });
     }
 };
 
 // ============================================================
-// Conteo de servicios activos del cliente — GET /api/services/count
+// Conteo de servicios activos del cliente autenticado
+// GET /api/services/count
 // ============================================================
 const getActiveServicesCount = async (req, res) => {
-    const cliente_id = req.user.id;
+    const clienteId = req.user.id;
     try {
-        const result = await db.query(`
-            SELECT COUNT(*) FROM servicios 
-            WHERE cliente_id = $1 
-            AND estado IN ('pendiente', 'asignado', 'en_camino', 'en_progreso')
-        `, [cliente_id]);
-        res.status(200).json({ ok: true, count: parseInt(result.rows[0].count) });
+        const count = await servicesService.getActiveServicesCount(clienteId);
+        res.json({ ok: true, count });
     } catch (error) {
-        console.error("❌ Error getActiveServicesCount:", error);
-        res.status(500).json({ ok: false, message: "Error al obtener estadísticas" });
+        console.error('❌ Error getActiveServicesCount:', error);
+        res.json({ ok: false, count: 0 });
     }
 };
 
 // ============================================================
-// Servicio activo del cliente — GET /api/services/active
+// Servicio activo del cliente autenticado
+// GET /api/services/active
 // ============================================================
 const getActiveServiceForClient = async (req, res) => {
-    const cliente_id = req.user.id;
+    const clienteId = req.user.id;
     try {
-        const result = await db.query(`
-            SELECT 
-                s.id,
-                s.tipo_servicio,
-                s.descripcion,
-                s.direccion_servicio,
-                s.estado,
-                s.precio_estimado,
-                s.fecha_solicitud,
-                s.mecanico_id,
-                u.nombre_completo AS mecanico_nombre,
-                u.telefono AS mecanico_telefono
-            FROM servicios s
-            LEFT JOIN perfiles_mecanico pm ON s.mecanico_id = pm.id
-            LEFT JOIN usuarios u ON pm.usuario_id = u.id
-            WHERE s.cliente_id = $1
-              AND s.estado IN ('pendiente', 'asignado', 'en_camino', 'en_progreso')
-            ORDER BY s.fecha_solicitud DESC
-            LIMIT 1
-        `, [cliente_id]);
-
-        if (result.rows.length === 0) return res.json({ ok: true, service: null });
-        res.json({ ok: true, service: result.rows[0] });
+        const service = await servicesService.getActiveService(clienteId);
+        if (service) {
+            res.json({ ok: true, service });
+        } else {
+            res.json({ ok: false, message: 'No hay servicios activos' });
+        }
     } catch (error) {
-        console.error("❌ Error getActiveServiceForClient:", error);
-        res.status(500).json({ ok: false, message: "Error al obtener servicio activo" });
+        console.error('❌ Error getActiveServiceForClient:', error);
+        res.status(500).json({ ok: false, message: error.message });
     }
 };
 
 // ============================================================
-// Cancelar servicio — PUT /api/services/cancel/:serviceId
+// Cancelar un servicio
+// PUT /api/services/cancel/:serviceId
 // ============================================================
 const cancelService = async (req, res) => {
     const { serviceId } = req.params;
-    const cliente_id = req.user.id;
-
+    const clienteId = req.user.id;
     try {
-        const check = await db.query(`
-            SELECT id, estado FROM servicios 
-            WHERE id = $1 AND cliente_id = $2
-        `, [serviceId, cliente_id]);
-
-        if (check.rows.length === 0) {
-            return res.status(404).json({ ok: false, message: "Servicio no encontrado" });
+        const success = await servicesService.cancelService(serviceId, clienteId);
+        if (!success) {
+            return res.status(404).json({ ok: false, message: 'Servicio no encontrado o no pertenece a este usuario' });
         }
-        if (check.rows[0].estado === 'finalizado') {
-            return res.status(400).json({ ok: false, message: "No se puede cancelar un servicio finalizado" });
-        }
-
-        await db.query(`UPDATE servicios SET estado = 'cancelado' WHERE id = $1`, [serviceId]);
-
-        res.json({ ok: true, message: "Servicio cancelado" });
+        res.json({ ok: true, message: 'Servicio cancelado exitosamente' });
     } catch (error) {
-        console.error("❌ Error cancelService:", error);
-        res.status(500).json({ ok: false, message: "Error al cancelar el servicio" });
+        console.error('❌ Error cancelService:', error);
+        res.status(500).json({ ok: false, message: error.message });
     }
 };
 
 // ============================================================
-// Solicitudes pendientes para mecánico — GET /api/services/mechanic/pending/:mecanicoId
-// CORRECCIÓN 3: incluye servicios con mecanico_id asignado al mecánico actual
+// Solicitudes pendientes para un mecánico
+// GET /api/services/mechanic/pending/:mecanicoId
 // ============================================================
 const getPendingRequestsForMechanic = async (req, res) => {
     const { mecanicoId } = req.params;
     try {
         const result = await db.query(`
-            SELECT 
-                s.id,
-                s.tipo_servicio,
-                s.descripcion,
-                s.direccion_servicio,
-                s.estado,
-                s.precio_estimado,
-                s.fecha_solicitud,
-                u.nombre_completo AS cliente_nombre,
-                u.telefono AS cliente_telefono
+            SELECT s.*, u.nombre_completo AS cliente_nombre, u.telefono AS cliente_telefono
             FROM servicios s
             JOIN usuarios u ON s.cliente_id = u.id
-            WHERE s.estado = 'pendiente'
-              AND (
-                s.mecanico_id IS NULL          -- solicitudes abiertas para cualquier mecánico
-                OR s.mecanico_id = $1          -- solicitudes dirigidas específicamente a este mecánico
-              )
-            ORDER BY s.fecha_solicitud ASC
+            WHERE (s.mecanico_id = $1 OR s.mecanico_id IS NULL)
+            AND s.estado = 'pendiente'
+            ORDER BY s.fecha_solicitud DESC
         `, [mecanicoId]);
-
         res.json({ ok: true, requests: result.rows });
     } catch (error) {
-        console.error("❌ Error getPendingRequestsForMechanic:", error);
-        res.status(500).json({ ok: false, message: "Error al obtener solicitudes pendientes" });
+        console.error('❌ Error getPendingRequestsForMechanic:', error);
+        res.status(500).json({ ok: false, message: error.message });
     }
 };
 
 // ============================================================
-// Servicio activo del mecánico — GET /api/services/mechanic/active/:mecanicoId
+// Servicio activo para un mecánico
+// GET /api/services/mechanic/active/:mecanicoId
 // ============================================================
 const getActiveServiceForMechanic = async (req, res) => {
     const { mecanicoId } = req.params;
     try {
         const result = await db.query(`
-            SELECT 
-                s.id,
-                s.tipo_servicio,
-                s.descripcion,
-                s.direccion_servicio,
-                s.estado,
-                s.precio_estimado,
-                s.fecha_solicitud,
-                u.nombre_completo AS cliente_nombre,
-                u.telefono AS cliente_telefono
+            SELECT s.*,
+                   u.nombre_completo AS cliente_nombre,
+                   u.telefono AS cliente_telefono,
+                   u.latitud AS cliente_lat,
+                   u.longitud AS cliente_lng
             FROM servicios s
             JOIN usuarios u ON s.cliente_id = u.id
             WHERE s.mecanico_id = $1
-              AND s.estado IN ('asignado', 'en_camino', 'en_progreso')
-            ORDER BY s.fecha_asignacion DESC
+            AND s.estado IN ('asignado', 'en_camino', 'en_progreso')
+            ORDER BY s.fecha_solicitud DESC
             LIMIT 1
         `, [mecanicoId]);
 
-        if (result.rows.length === 0) return res.json({ ok: true, service: null });
-        res.json({ ok: true, service: result.rows[0] });
+        if (result.rows.length > 0) {
+            res.json({ ok: true, service: result.rows[0] });
+        } else {
+            res.json({ ok: false, message: 'No hay servicios activos' });
+        }
     } catch (error) {
-        console.error("❌ Error getActiveServiceForMechanic:", error);
-        res.status(500).json({ ok: false, message: "Error al obtener servicio activo" });
+        console.error('❌ Error getActiveServiceForMechanic:', error);
+        res.status(500).json({ ok: false, message: error.message });
     }
 };
 
 // ============================================================
-// Aceptar servicio — PUT /api/services/accept/:serviceId
-// NOTIFICACIÓN al cliente cuando el mecánico acepta
+// Aceptar un servicio (mecánico)
+// PUT /api/services/accept/:serviceId
 // ============================================================
 const acceptService = async (req, res) => {
     const { serviceId } = req.params;
-    const { mechanicId } = req.body;
-
-    if (!mechanicId) return res.status(400).json({ ok: false, message: "Falta el ID del mecánico" });
+    const mecanicoId = req.user.id;
 
     try {
-        const check = await db.query(
-            `SELECT id, cliente_id, tipo_servicio FROM servicios WHERE id = $1 AND estado = 'pendiente'`,
+        // Obtener el perfil del mecánico a partir del usuario autenticado
+        const perfilResult = await db.query(
+            'SELECT id FROM perfiles_mecanico WHERE usuario_id = $1',
+            [mecanicoId]
+        );
+        if (perfilResult.rows.length === 0) {
+            return res.status(404).json({ ok: false, message: 'Perfil de mecánico no encontrado' });
+        }
+        const perfilId = perfilResult.rows[0].id;
+
+        const current = await db.query(
+            'SELECT estado, cliente_id FROM servicios WHERE id = $1',
             [serviceId]
         );
-        if (check.rows.length === 0) {
-            return res.status(409).json({ ok: false, message: "El servicio ya no está disponible" });
+        if (current.rows.length === 0) {
+            return res.status(404).json({ ok: false, message: 'Servicio no encontrado' });
+        }
+        if (current.rows[0].estado !== 'pendiente') {
+            return res.status(400).json({ ok: false, message: 'El servicio ya no está disponible' });
         }
 
-        const { cliente_id, tipo_servicio } = check.rows[0];
+        const clienteId = current.rows[0].cliente_id;
 
         await db.query(`
-            UPDATE servicios 
-            SET mecanico_id = $1, estado = 'asignado', fecha_asignacion = NOW()
+            UPDATE servicios
+            SET estado = 'asignado', mecanico_id = $1, fecha_asignacion = NOW(), actualizado_en = NOW()
             WHERE id = $2
-        `, [mechanicId, serviceId]);
+        `, [perfilId, serviceId]);
 
-        // Notificación al cliente de que el mecánico aceptó
-        const mecanicoInfo = await db.query(`
-            SELECT u.nombre_completo 
-            FROM perfiles_mecanico pm
-            JOIN usuarios u ON pm.usuario_id = u.id
-            WHERE pm.id = $1
-        `, [mechanicId]);
-
-        const nombreMecanico = mecanicoInfo.rows[0]?.nombre_completo || 'Un mecánico';
+        await db.query(`
+            INSERT INTO estados_servicio (servicio_id, usuario_id, estado_anterior, estado_nuevo, observacion)
+            VALUES ($1, $2, 'pendiente', 'asignado', 'Servicio aceptado por el mecánico')
+        `, [serviceId, mecanicoId]);
 
         await db.query(`
             INSERT INTO notificaciones (usuario_id, servicio_id, tipo, mensaje)
-            VALUES ($1, $2, 'servicio_aceptado', $3)
-        `, [cliente_id, serviceId, `${nombreMecanico} aceptó tu solicitud de "${tipo_servicio}". ¡Ya va en camino!`]);
+            VALUES ($1, $2, 'servicio_aceptado', 'Un mecánico ha aceptado tu solicitud de servicio.')
+        `, [clienteId, serviceId]);
 
-        res.json({ ok: true, message: "Servicio aceptado correctamente" });
+        res.json({ ok: true, message: 'Servicio aceptado' });
     } catch (error) {
-        console.error("❌ Error acceptService:", error);
-        res.status(500).json({ ok: false, message: "Error al aceptar el servicio" });
+        console.error('❌ Error acceptService:', error);
+        res.status(500).json({ ok: false, message: error.message });
     }
 };
 
 // ============================================================
-// Rechazar servicio — PUT /api/services/reject/:serviceId
+// Rechazar un servicio (mecánico)
+// PUT /api/services/reject/:serviceId
 // ============================================================
 const rejectService = async (req, res) => {
-    res.json({ ok: true, message: "Solicitud rechazada" });
+    const { serviceId } = req.params;
+    const mecanicoId = req.user.id;
+
+    try {
+        const current = await db.query(
+            'SELECT estado, cliente_id FROM servicios WHERE id = $1',
+            [serviceId]
+        );
+        if (current.rows.length === 0) {
+            return res.status(404).json({ ok: false, message: 'Servicio no encontrado' });
+        }
+
+        await db.query(
+            'UPDATE servicios SET mecanico_id = NULL, actualizado_en = NOW() WHERE id = $1',
+            [serviceId]
+        );
+
+        await db.query(`
+            INSERT INTO estados_servicio (servicio_id, usuario_id, estado_anterior, estado_nuevo, observacion)
+            VALUES ($1, $2, 'pendiente', 'pendiente', 'Servicio rechazado por el mecánico')
+        `, [serviceId, mecanicoId]);
+
+        res.json({ ok: true, message: 'Servicio rechazado y devuelto a pendientes' });
+    } catch (error) {
+        console.error('❌ Error rejectService:', error);
+        res.status(500).json({ ok: false, message: error.message });
+    }
 };
 
 // ============================================================
-// Actualizar estado — PUT /api/services/status/:serviceId
+// Actualizar estado de un servicio (mecánico)
+// PUT /api/services/status/:serviceId
+// Body: { status } — 'en_camino' | 'en_progreso' | 'finalizado'
 // ============================================================
 const updateServiceStatus = async (req, res) => {
     const { serviceId } = req.params;
     const { status } = req.body;
+    const mecanicoUserId = req.user.id;
 
-    const estadosValidos = ['en_camino', 'en_progreso', 'finalizado', 'cancelado'];
+    const estadosValidos = ['en_camino', 'en_progreso', 'finalizado'];
     if (!estadosValidos.includes(status)) {
-        return res.status(400).json({ ok: false, message: "Estado inválido" });
+        return res.status(400).json({ ok: false, message: `Estado inválido. Usa: ${estadosValidos.join(', ')}` });
     }
 
     try {
-        let extraFields = '';
-        if (status === 'en_progreso') extraFields = ', fecha_inicio = NOW()';
-        if (status === 'finalizado')  extraFields = ', fecha_finalizacion = NOW()';
+        const current = await db.query(
+            'SELECT estado, cliente_id FROM servicios WHERE id = $1',
+            [serviceId]
+        );
+        if (current.rows.length === 0) {
+            return res.status(404).json({ ok: false, message: 'Servicio no encontrado' });
+        }
+
+        const estadoAnterior = current.rows[0].estado;
+        const clienteId      = current.rows[0].cliente_id;
+
+        let updateQuery = 'UPDATE servicios SET estado = $1, actualizado_en = NOW()';
+        if (status === 'finalizado') updateQuery += ', fecha_finalizacion = NOW()';
+        updateQuery += ' WHERE id = $2';
+
+        await db.query(updateQuery, [status, serviceId]);
 
         await db.query(`
-            UPDATE servicios SET estado = $1 ${extraFields} WHERE id = $2
-        `, [status, serviceId]);
+            INSERT INTO estados_servicio (servicio_id, usuario_id, estado_anterior, estado_nuevo, observacion)
+            VALUES ($1, $2, $3, $4, 'Estado actualizado por el mecánico')
+        `, [serviceId, mecanicoUserId, estadoAnterior, status]);
 
-        res.json({ ok: true, message: `Estado actualizado a: ${status}` });
+        // Notificación al cliente según el nuevo estado
+        const mensajes = {
+            en_camino:   { tipo: 'servicio_en_camino',  msg: 'El mecánico está en camino a tu ubicación.' },
+            finalizado:  { tipo: 'servicio_finalizado', msg: 'Tu servicio ha finalizado. ¡No olvides calificar al mecánico!' }
+        };
+
+        if (mensajes[status]) {
+            await db.query(`
+                INSERT INTO notificaciones (usuario_id, servicio_id, tipo, mensaje)
+                VALUES ($1, $2, $3, $4)
+            `, [clienteId, serviceId, mensajes[status].tipo, mensajes[status].msg]);
+        }
+
+        res.json({ ok: true, message: `Servicio actualizado a ${status}` });
     } catch (error) {
-        console.error("❌ Error updateServiceStatus:", error);
-        res.status(500).json({ ok: false, message: "Error al actualizar el estado" });
+        console.error('❌ Error updateServiceStatus:', error);
+        res.status(500).json({ ok: false, message: error.message });
     }
 };
 

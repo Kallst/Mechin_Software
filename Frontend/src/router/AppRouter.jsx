@@ -13,6 +13,9 @@ import ClientDashboard   from '../pages/dashboard/ClientDashboard';
 import MechanicDashboard from '../pages/dashboard/MechanicDashboard';
 import AdminDashboard    from '../pages/dashboard/AdminDashboard';
 
+// Pagos
+import PaymentPage from '../pages/payments/PaymentPage';
+
 const AppRouter = () => {
   return (
     <Routes>
@@ -46,6 +49,16 @@ const AppRouter = () => {
         element={
           <ProtectedRoute allowedRoles={['administrador']}>
             <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ── Pago de servicio ─────────────────────────── */}
+      <Route
+        path="/pagar"
+        element={
+          <ProtectedRoute allowedRoles={['cliente']}>
+            <PaymentPage />
           </ProtectedRoute>
         }
       />
