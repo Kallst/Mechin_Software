@@ -7,8 +7,6 @@ import './EditProfilePage.css';
 
 const EditProfilePage = () => {
     const navigate = useNavigate();
-    
-    // SOLUCIÓN AL INPUT: Extraemos solo el ID para que React no se confunda
     const currentUserId = authService.getCurrentUser()?.id;
     
     const [formData, setFormData] = useState({
@@ -20,9 +18,12 @@ const EditProfilePage = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [statusMessage, setStatusMessage] = useState({ type: '', text: '' });
+    
+    // Estados para la eliminación de cuenta
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
-        // Ahora solo vigila el ID, evitando peticiones infinitas al escribir
         if (currentUserId) {
             usersService.getUserProfile(currentUserId)
                 .then(data => {
@@ -41,7 +42,7 @@ const EditProfilePage = () => {
                     setIsLoading(false);
                 });
         }
-    }, [currentUserId]); // <-- El cambio clave está aquí
+    }, [currentUserId]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -54,21 +55,15 @@ const EditProfilePage = () => {
         setStatusMessage({ type: '', text: '' });
 
         try {
-            // Dentro de handleSubmit en EditProfilePage.jsx
             const response = await usersService.updateProfile(currentUserId, {
                 nombre_completo: formData.nombre_completo,
-                correo: formData.correo, // <-- ¡Agrega esta línea vital!
+                correo: formData.correo, // <-- ¡Mantenemos el correo para que el backend no falle!
                 telefono: formData.telefono
             });
 
-            // Revisa si tu backend devuelve algo como { ok: true } o simplemente { id, nombre... }
-            // Si devuelve 'ok' usamos la primera condición. Si no, ajusta esto según lo que devuelva tu API.
-            // Para mantener compatibilidad con lo que veníamos haciendo, asumimos que devuelve un objeto.
-            // Si la respuesta tiene error o mensaje, lo atrapamos. Si no, es éxito.
-            if (!response.error) { // Asumiendo que tu backend NO envía un campo 'error' cuando es exitoso
+            if (!response.error) { 
                 setStatusMessage({ type: 'success', text: '¡Perfil actualizado con éxito!' });
                 
-                // Actualizamos también los datos en el localStorage
                 const currentUser = JSON.parse(localStorage.getItem('user'));
                 if (currentUser) {
                     currentUser.nombre_completo = formData.nombre_completo;
@@ -85,6 +80,29 @@ const EditProfilePage = () => {
             setStatusMessage({ type: 'error', text: 'Error de conexión con el servidor.' });
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    // Función para eliminar la cuenta
+    const handleDeleteAccount = async () => {
+        setIsDeleting(true);
+        try {
+            const response = await usersService.deleteAccount(currentUserId);
+            if (!response.error) {
+                // Si se elimina correctamente, borramos la sesión y lo mandamos al login
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                navigate('/login');
+            } else {
+                setStatusMessage({ type: 'error', text: response.message || 'Error al eliminar la cuenta.' });
+                setShowDeleteModal(false);
+            }
+        } catch (error) {
+            console.error("Error al eliminar cuenta:", error);
+            setStatusMessage({ type: 'error', text: 'Error de conexión con el servidor.' });
+            setShowDeleteModal(false);
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -115,7 +133,6 @@ const EditProfilePage = () => {
                 
                 <div className="sb-spacer"></div>
                 
-                {/* NUEVO BOTÓN DE CERRAR SESIÓN */}
                 <div className="sb-logout-wrapper">
                     <button className="btn-logout-sidebar" onClick={handleLogout}>
                         Cerrar Sesión
@@ -189,10 +206,54 @@ const EditProfilePage = () => {
                                     </button>
                                 </div>
                             </form>
+
+                            {/* ZONA DE PELIGRO */}
+                            <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: '1px solid #eee' }}>
+                                <h3 style={{ color: '#d32f2f', fontSize: '16px', marginBottom: '10px' }}>Zona de Peligro</h3>
+                                <p style={{ fontSize: '13px', color: '#666', marginBottom: '15px' }}>
+                                    Una vez que elimines tu cuenta, no hay vuelta atrás. Por favor, asegúrate de estar seguro.
+                                </p>
+                                <button 
+                                    type="button" 
+                                    onClick={() => setShowDeleteModal(true)}
+                                    style={{ background: 'transparent', border: '1px solid #d32f2f', color: '#d32f2f', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
+                                >
+                                    Eliminar mi cuenta
+                                </button>
+                            </div>
+
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}
+            {showDeleteModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                    <div style={{ background: 'white', padding: '30px', borderRadius: '12px', maxWidth: '400px', width: '90%', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
+                        <h2 style={{ margin: '0 0 15px 0', fontSize: '18px', color: '#333' }}>¿Estás absolutamente seguro?</h2>
+                        <p style={{ margin: '0 0 25px 0', fontSize: '14px', color: '#666', lineHeight: '1.5' }}>
+                            Esta acción eliminará permanentemente tu cuenta y todos los datos asociados a ella. Esta acción no se puede deshacer.
+                        </p>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                            <button 
+                                onClick={() => setShowDeleteModal(false)} 
+                                disabled={isDeleting}
+                                style={{ padding: '8px 16px', border: '1px solid #ddd', background: 'white', borderRadius: '6px', cursor: 'pointer', color: '#333' }}
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={handleDeleteAccount} 
+                                disabled={isDeleting}
+                                style={{ padding: '8px 16px', border: 'none', background: '#d32f2f', color: 'white', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
+                            >
+                                {isDeleting ? 'Eliminando...' : 'Sí, eliminar cuenta'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

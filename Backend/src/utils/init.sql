@@ -445,3 +445,47 @@ CREATE TABLE IF NOT EXISTS chat_mensajes (
 CREATE INDEX IF NOT EXISTS idx_chat_servicio ON chat_mensajes(servicio_id);
 CREATE INDEX IF NOT EXISTS idx_chat_emisor   ON chat_mensajes(emisor_id);
 CREATE INDEX IF NOT EXISTS idx_chat_tiempo   ON chat_mensajes(enviado_en);
+
+-- 1. Quitamos la restricción actual
+ALTER TABLE servicios 
+DROP CONSTRAINT servicios_cliente_id_fkey;
+
+-- 2. La volvemos a crear pero con borrado en cascada
+ALTER TABLE servicios 
+ADD CONSTRAINT servicios_cliente_id_fkey 
+FOREIGN KEY (cliente_id) 
+REFERENCES usuarios(id) 
+ON DELETE CASCADE;
+
+-- 1. Elimina la restricción que está bloqueando todo
+ALTER TABLE servicios 
+DROP CONSTRAINT servicios_cliente_id_fkey;
+
+-- 2. Créala de nuevo con la instrucción de borrar en cascada
+ALTER TABLE servicios 
+ADD CONSTRAINT servicios_cliente_id_fkey 
+FOREIGN KEY (cliente_id) 
+REFERENCES usuarios(id) 
+ON DELETE CASCADE;
+
+-- 1. Quitamos el candado que nos detiene ahora
+ALTER TABLE estados_servicio 
+DROP CONSTRAINT estados_servicio_usuario_id_fkey;
+
+-- 2. Lo ponemos de nuevo con permiso de borrar en cascada
+ALTER TABLE estados_servicio 
+ADD CONSTRAINT estados_servicio_usuario_id_fkey 
+FOREIGN KEY (usuario_id) 
+REFERENCES usuarios(id) 
+ON DELETE CASCADE;
+
+-- 1. Eliminamos el candado de la tabla pagos
+ALTER TABLE pagos 
+DROP CONSTRAINT pagos_cliente_id_fkey;
+
+-- 2. Lo recreamos con borrado en cascada
+ALTER TABLE pagos 
+ADD CONSTRAINT pagos_cliente_id_fkey 
+FOREIGN KEY (cliente_id) 
+REFERENCES usuarios(id) 
+ON DELETE CASCADE;
