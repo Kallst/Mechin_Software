@@ -1,0 +1,172 @@
+/* ── RepuestoDetail.css ──────────────────────────────────── */
+
+.detail-shell {
+    min-height: 100vh;
+    background: #0f1117;
+    color: #e8eaf0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+.detail-loading, .detail-error-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    gap: 16px;
+    color: #4a5070;
+    background: #0f1117;
+}
+.detail-error-page div { font-size: 48px; }
+.detail-error-page button {
+    background: #ff6e2d; color: white;
+    border: none; padding: 10px 24px;
+    border-radius: 8px; cursor: pointer;
+    font-size: 14px; margin-top: 8px;
+}
+
+.spinner {
+    width: 36px; height: 36px;
+    border: 3px solid #1e2130;
+    border-top-color: #ff6e2d;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.detail-topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 32px;
+    background: #13161f;
+    border-bottom: 1px solid #1e2130;
+}
+
+.btn-back {
+    background: #1a1d2e;
+    color: #e8eaf0;
+    border: 1px solid #2a2d3e;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.btn-back:hover { background: #ff6e2d; border-color: #ff6e2d; }
+
+.detail-breadcrumb {
+    font-size: 13px;
+    color: #4a5070;
+}
+
+.detail-body {
+    display: flex;
+    gap: 40px;
+    padding: 40px 32px;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+/* Imagen */
+.detail-image-col { flex: 0 0 360px; }
+.detail-image-box {
+    width: 360px; height: 320px;
+    background: #13161f;
+    border: 1px solid #1e2130;
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.detail-image-box img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+}
+.detail-img-placeholder { font-size: 80px; opacity: 0.3; }
+
+/* Info */
+.detail-info-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.detail-categoria {
+    font-size: 11px;
+    color: #ff6e2d;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.detail-nombre {
+    font-size: 26px;
+    font-weight: 800;
+    color: #e8eaf0;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.detail-estado-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.detail-stock-ok { font-size: 13px; color: #4ade80; }
+.detail-stock-no { font-size: 13px; color: #f87171; }
+
+.detail-precio {
+    font-size: 32px;
+    font-weight: 800;
+    color: #4ade80;
+}
+
+.detail-descripcion h4 {
+    font-size: 13px;
+    color: #4a5070;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin: 0 0 8px;
+}
+.detail-descripcion p {
+    font-size: 14px;
+    color: #7a8299;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.detail-specs {
+    background: #13161f;
+    border: 1px solid #1e2130;
+    border-radius: 10px;
+    overflow: hidden;
+}
+.spec-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid #1e2130;
+    font-size: 13px;
+}
+.spec-row:last-child { border-bottom: none; }
+.spec-label { color: #4a5070; }
+.spec-value { color: #e8eaf0; font-weight: 500; }
+
+.detail-tienda-card {
+    display: flex;
+    gap: 14px;
+    background: #13161f;
+    border: 1px solid #1e2130;
+    border-radius: 12px;
+    padding: 16px;
+    align-items: flex-start;
+}
+.tienda-icon { font-size: 28px; }
+.tienda-nombre { font-size: 15px; font-weight: 700; color: #e8eaf0; margin-bottom: 4px; }
+.tienda-dir, .tienda-tel { font-size: 12px; color: #4a5070; margin-top: 2px; }

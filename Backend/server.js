@@ -5,6 +5,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const db = require('./src/config/db');
 
+
 // Importación de rutas
 const authRoutes         = require('./src/modules/auth/auth.routes');
 const geolocationRoutes  = require('./src/modules/geolocation/geolocation.routes');
@@ -14,6 +15,8 @@ const mechanicRoutes     = require('./src/modules/mechanics/mechanics.routes');
 const notificationRoutes = require('./src/modules/notifications/notifications.routes');
 const paymentsRoutes     = require('./src/modules/payments/payments.routes');
 const chatRoutes         = require('./src/modules/chat/chat.routes'); // ← NUEVO
+const reputationRoutes = require('./src/modules/reputation/reputation.routes');
+const catalogRoutes = require('./src/modules/catalog/catalog.routes');
 
 const app    = express();
 const server = http.createServer(app);
@@ -37,6 +40,8 @@ app.use('/api/mechanics',     mechanicRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/payments',      paymentsRoutes);
 app.use('/api/chat',          chatRoutes); // ← NUEVO
+app.use('/api/reputation',    reputationRoutes); // ← NUEVO
+app.use('/api/catalog', catalogRoutes);
 
 // --- LÓGICA DE CHAT (SOCKETS) ---
 io.on('connection', (socket) => {
