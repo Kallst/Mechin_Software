@@ -234,3 +234,23 @@ select.fg-input { appearance: none; cursor: pointer; }
 }
 .btn-guardar:hover:not(:disabled) { background: #e55a1a; }
 .btn-guardar:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── MECHIN-41 y MECHIN-42: Botones de acción por fila ────── */
+.st-acciones {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.btn-editar, .btn-eliminar {
+    background: transparent;
+    border: 1px solid #2a2d3e;
+    border-radius: 6px;
+    padding: 5px 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.15s;
+    line-height: 1;
+}
+.btn-editar:hover  { background: #1a2d4a; border-color: #3b82f6; }
+.btn-eliminar:hover { background: #3d1a0d; border-color: #ef4444; }
