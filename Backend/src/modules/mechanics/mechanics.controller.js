@@ -96,19 +96,59 @@ const getProfile = async (req, res) => {
 
 const updateProfile = async (req, res) => {
     const { userId } = req.params;
-    const { biografia, telefono, direccion } = req.body;
+    // Ahora también recibimos "especialidades" (un arreglo de IDs, ej: [1, 3, 5])
+    const { biografia, telefono, direccion, especialidades } = req.body;
     
     try {
+        // INICIAMOS TRANSACCIÓN (Para que si algo falla, no se guarde a medias)
+        await db.query('BEGIN');
+
+        // 1. Actualizar tabla usuarios (datos básicos)
         await db.query(`
             UPDATE usuarios SET telefono = $1, direccion = $2 WHERE id = $3
         `, [telefono, direccion, userId]);
 
-        await db.query(`
+        // 2. Actualizar tabla perfiles_mecanico (biografía) y OBTENER su ID interno
+        const perfilResult = await db.query(`
             UPDATE perfiles_mecanico SET biografia = $1 WHERE usuario_id = $2
+            RETURNING id
         `, [biografia, userId]);
 
-        res.json({ ok: true, message: "Perfil actualizado correctamente" });
+        // Verificamos que el perfil exista
+        if (perfilResult.rows.length === 0) {
+            await db.query('ROLLBACK');
+            return res.status(404).json({ ok: false, message: "Perfil de mecánico no encontrado" });
+        }
+
+        const perfilMecanicoId = perfilResult.rows[0].id;
+
+        // 3. Gestionar Especialidades (Si vienen en la petición)
+        if (Array.isArray(especialidades)) {
+            // A. Borramos las especialidades viejas de este mecánico
+            await db.query(`
+                DELETE FROM mecanico_especialidades WHERE perfil_mecanico_id = $1
+            `, [perfilMecanicoId]);
+
+            // B. Insertamos las nuevas especialidades marcadas
+            if (especialidades.length > 0) {
+                // Iteramos sobre los IDs y los insertamos uno por uno
+                for (let especialidadId of especialidades) {
+                    await db.query(`
+                        INSERT INTO mecanico_especialidades (perfil_mecanico_id, especialidad_id)
+                        VALUES ($1, $2)
+                    `, [perfilMecanicoId, especialidadId]);
+                }
+            }
+        }
+
+        // CONFIRMAMOS TRANSACCIÓN
+        await db.query('COMMIT');
+        res.json({ ok: true, message: "Perfil y especialidades actualizados correctamente" });
+
     } catch (error) {
+        // SI ALGO FALLA, REVERTIMOS TODO
+        await db.query('ROLLBACK');
+        console.error("❌ Error en updateProfile:", error);
         res.status(500).json({ ok: false, error: error.message });
     }
 };
@@ -128,4 +168,38 @@ const toggleAvailability = async (req, res) => {
     }
 };
 
-module.exports = { getNearbyMechanics, getProfile, updateProfile, toggleAvailability };
+// Obtener lista de todas las especialidades disponibles en el sistema
+const getAllSpecialties = async (req, res) => {
+    try {
+        const result = await db.query('SELECT * FROM especialidades ORDER BY nombre ASC');
+        res.json({ ok: true, specialties: result.rows });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+};
+
+// Obtener las especialidades que tiene un mecánico específico
+const getMechanicSpecialties = async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const query = `
+            SELECT e.* FROM especialidades e
+            JOIN mecanico_especialidades me ON e.id = me.especialidad_id
+            JOIN perfiles_mecanico pm ON me.perfil_mecanico_id = pm.id
+            WHERE pm.usuario_id = $1
+        `;
+        const result = await db.query(query, [userId]);
+        res.json({ ok: true, specialties: result.rows });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+};
+
+module.exports = { 
+    getNearbyMechanics, 
+    getProfile, 
+    updateProfile, 
+    toggleAvailability, 
+    getAllSpecialties, 
+    getMechanicSpecialties 
+};

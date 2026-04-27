@@ -6,6 +6,7 @@ import useGeolocation from '../../hooks/useGeolocation';
 import SolicitarModal from '../../components/SolicitarModal/SolicitarModal';
 import ChatWindow from '../../components/ChatWindow/ChatWindow';
 import authService from '../../services/auth.service';
+import RatingModal from '../../pages/services/RatingModal'; 
 
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -44,7 +45,7 @@ const MapControls = ({ centerUser }) => {
 };
 
 const ClientDashboard = () => {
-    const { isSyncing } = useGeolocation();
+    const { coords, isSyncing } = useGeolocation();
     const navigate = useNavigate();
     const mapRef = useRef(null);
 
@@ -59,13 +60,16 @@ const ClientDashboard = () => {
     const [showNotif, setShowNotif]               = useState(false);
     const [showChat, setShowChat]                 = useState(false);
     const [activeService, setActiveService]       = useState(null);
-    const [clientCoords]                          = useState({ lat: 5.067, lng: -75.517 });
+    const [serviciosCalificados, setServiciosCalificados] = useState([]); 
+    
     const [stats, setStats] = useState({
         activos: 0,
         mecanicosCerca: 0,
         completados: 12,
         rating: "4.8 ★"
     });
+
+    const [showRating, setShowRating] = useState(false);
 
     const [chatMessages, setChatMessages] = useState([]);
     const [chatInput, setChatInput]       = useState('');
@@ -74,6 +78,11 @@ const ClientDashboard = () => {
 
     const currentUser = authService.getCurrentUser();
     const clienteId   = currentUser ? currentUser.id : null;
+
+    const safeCoords = {
+        lat: coords?.lat || 5.067,
+        lng: coords?.lng || -75.517
+    };
 
     const getAuthHeaders = () => {
         const token = localStorage.getItem('token');
@@ -84,27 +93,36 @@ const ClientDashboard = () => {
     };
 
     useEffect(() => {
-        socketRef.current = io('http://localhost:5000', { transports: ['websocket'] });
+        socketRef.current = io('http://localhost:5000', { 
+            transports: ['websocket'],
+            reconnection: true 
+        });
+
         socketRef.current.on('receive_message', (data) => {
             setChatMessages((prev) => [...prev, data]);
         });
+
+        socketRef.current.on('connect', () => {
+            if (activeChatServiceId.current) {
+                socketRef.current.emit('join_chat', activeChatServiceId.current);
+            }
+        });
+
         return () => { socketRef.current.disconnect(); };
     }, []);
 
     useEffect(() => {
         if (!activeService || !socketRef.current) return;
         const newServiceId = activeService.id;
-        if (activeChatServiceId.current === newServiceId) return;
-        activeChatServiceId.current = newServiceId;
-        if (socketRef.current.connected) {
-            socketRef.current.emit('join_chat', newServiceId);
-        } else {
-            socketRef.current.on('connect', () => {
+        
+        if (activeChatServiceId.current !== newServiceId) {
+            activeChatServiceId.current = newServiceId;
+            if (socketRef.current.connected) {
                 socketRef.current.emit('join_chat', newServiceId);
-            });
+            }
+            setChatMessages([]);
+            loadChatHistory(newServiceId);
         }
-        setChatMessages([]);
-        loadChatHistory(newServiceId);
     }, [activeService?.id]);
 
     const loadChatHistory = async (serviceId) => {
@@ -144,8 +162,9 @@ const ClientDashboard = () => {
     };
 
     const loadNearbyMechanics = useCallback(async () => {
+        if (!safeCoords.lat || !safeCoords.lng) return;
         try {
-            const url = `http://localhost:5000/api/mechanics/nearby?lat=${clientCoords.lat}&lng=${clientCoords.lng}`;
+            const url = `http://localhost:5000/api/mechanics/nearby?lat=${safeCoords.lat}&lng=${safeCoords.lng}`;
             const response = await fetch(url, { headers: getAuthHeaders() });
             const data = await response.json();
             let mechanicArray = [];
@@ -157,7 +176,7 @@ const ClientDashboard = () => {
             console.error("Error mecánicos:", error);
             setMechanics([]);
         }
-    }, [clientCoords.lat, clientCoords.lng]);
+    }, [safeCoords.lat, safeCoords.lng]);
 
     const checkActiveService = useCallback(async () => {
         if (!clienteId) return;
@@ -229,7 +248,7 @@ const ClientDashboard = () => {
             clearInterval(mechanicInterval);
             clearInterval(notifInterval);
         };
-    }, [loadNearbyMechanics, checkActiveService]);
+    }, [loadNearbyMechanics, checkActiveService, clienteId]);
 
     const handleSelectMechanic = (mech) => { setSelectedMechanic(mech); setShowDetail(true); };
     const openSolicitarModal   = () => { setShowDetail(false); setIsModalOpen(true); };
@@ -258,12 +277,12 @@ const ClientDashboard = () => {
     const handleFinalSubmit = async (datosSolicitud) => {
         setApiError('');
         const payload = {
-            mecanico_id:        selectedMechanic?.mecanico_id || null,
-            tipo_servicio:      datosSolicitud.tipo_servicio,
-            descripcion:        datosSolicitud.descripcion,
+            mecanico_id:         selectedMechanic?.mecanico_id || null,
+            tipo_servicio:       datosSolicitud.tipo_servicio,
+            descripcion:         datosSolicitud.descripcion,
             direccion_servicio: datosSolicitud.direccion_servicio,
-            latitud_servicio:   clientCoords.lat,
-            longitud_servicio:  clientCoords.lng
+            latitud_servicio:   safeCoords.lat,
+            longitud_servicio:  safeCoords.lng
         };
         try {
             const response = await fetch('http://localhost:5000/api/services', {
@@ -280,6 +299,12 @@ const ClientDashboard = () => {
                 setApiError(result.message || "No se pudo procesar la solicitud.");
             }
         } catch (error) { setApiError("Error de conexión."); }
+    };
+
+    const onCalificacionCompletada = (idDelServicio) => {
+        setServiciosCalificados(prev => [...prev, idDelServicio]);
+        setShowRating(false);
+        checkActiveService();
     };
 
     const getInitials = (name) => {
@@ -312,11 +337,10 @@ const ClientDashboard = () => {
                 </div>
 
                 <div className="sb-spacer"></div>
-                {/* ── AQUÍ SE MODIFICÓ: Envuelve el contenedor para navegar a /perfil ── */}
-                <div 
-                    className="sb-user" 
-                    onClick={() => navigate('/perfil')} 
-                    style={{ cursor: 'pointer' }} 
+                <div
+                    className="sb-user"
+                    onClick={() => navigate('/perfil')}
+                    style={{ cursor: 'pointer' }}
                     title="Ir a mi perfil"
                 >
                     <div className="sb-avatar">{getInitials(userName)}</div>
@@ -325,7 +349,6 @@ const ClientDashboard = () => {
                         <div className="sb-urole">Cliente</div>
                     </div>
                 </div>
-                {/* ─────────────────────────────────────────────────────────────────── */}
             </div>
 
             <div className="main">
@@ -384,7 +407,21 @@ const ClientDashboard = () => {
                                             💳 Pagar
                                         </button>
                                     )}
+                                    
+                                    {activeService.estado === 'finalizado' && 
+                                     !serviciosCalificados.includes(activeService.id) && 
+                                     !activeService.calificado && (
+                                        <button
+                                            className="btn-pagar-icon"
+                                            onClick={() => setShowRating(true)}
+                                            title="Calificar servicio"
+                                        >
+                                            ⭐ Calificar
+                                        </button>
+                                    )}
+
                                     <button className="btn-chat-icon" onClick={() => setShowChat(!showChat)}>💬</button>
+                                    
                                     {activeService.estado !== 'finalizado' && (
                                         <button className="btn-cancel-icon" onClick={() => handleCancelService(activeService.id)}>×</button>
                                     )}
@@ -436,36 +473,38 @@ const ClientDashboard = () => {
                         <div className="map-card" style={{ flex: 2, position: 'relative', overflow: 'hidden' }}>
                             <div className="map-head">Mapa de servicio en tiempo real</div>
                             <div className="map-body" style={{ height: '400px', width: '100%', position: 'relative' }}>
-                                <MapContainer
-                                    center={[clientCoords.lat, clientCoords.lng]}
-                                    zoom={14}
-                                    style={{ height: '100%', width: '100%' }}
-                                    zoomControl={false}
-                                    scrollWheelZoom={true}
-                                    ref={mapRef}
-                                >
-                                    <TileLayer
-                                        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                                        attribution='&copy; OpenStreetMap'
-                                    />
-                                    <MapControls centerUser={() => mapRef.current?.setView([clientCoords.lat, clientCoords.lng], 15)} />
-                                    <Marker position={[clientCoords.lat, clientCoords.lng]} icon={homeIcon}>
-                                        <Popup>Tu ubicación</Popup>
-                                    </Marker>
-                                    {filteredMechanics.map((mech) => (
-                                        <Marker
-                                            key={mech.mecanico_id || mech.id}
-                                            position={[mech.latitud || mech.lat, mech.longitud || mech.lng]}
-                                            icon={carIcon}
-                                            eventHandlers={{ click: () => handleSelectMechanic(mech) }}
-                                        >
-                                            <Popup>
-                                                <strong>{mech.nombre_completo || mech.nombre}</strong><br />
-                                                {mech.especialidad}
-                                            </Popup>
+                                {safeCoords.lat && safeCoords.lng && (
+                                    <MapContainer
+                                        center={[safeCoords.lat, safeCoords.lng]}
+                                        zoom={14}
+                                        style={{ height: '100%', width: '100%' }}
+                                        zoomControl={false}
+                                        scrollWheelZoom={true}
+                                        ref={mapRef}
+                                    >
+                                        <TileLayer
+                                            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                                            attribution='&copy; OpenStreetMap'
+                                        />
+                                        <MapControls centerUser={() => mapRef.current?.setView([safeCoords.lat, safeCoords.lng], 15)} />
+                                        <Marker position={[safeCoords.lat, safeCoords.lng]} icon={homeIcon}>
+                                            <Popup>Tu ubicación</Popup>
                                         </Marker>
-                                    ))}
-                                </MapContainer>
+                                        {filteredMechanics.map((mech) => (
+                                            <Marker
+                                                key={mech.mecanico_id || mech.id}
+                                                position={[mech.latitud || mech.lat, mech.longitud || mech.lng]}
+                                                icon={carIcon}
+                                                eventHandlers={{ click: () => handleSelectMechanic(mech) }}
+                                            >
+                                                <Popup>
+                                                    <strong>{mech.nombre_completo || mech.nombre}</strong><br />
+                                                    {mech.especialidad}
+                                                </Popup>
+                                            </Marker>
+                                        ))}
+                                    </MapContainer>
+                                )}
 
                                 {showDetail && selectedMechanic && (
                                     <div className="mech-detail-panel" style={{ zIndex: 1000 }}>
@@ -517,6 +556,15 @@ const ClientDashboard = () => {
                 selectedMechanic={selectedMechanic}
                 externalError={apiError}
             />
+
+            {showRating && activeService && (
+                <RatingModal
+                    servicioId={activeService.id}
+                    mecanicoId={activeService.mecanico_id}
+                    onCalificado={onCalificacionCompletada}
+                    onCerrar={() => setShowRating(false)}
+                />
+            )}
         </div>
     );
 };

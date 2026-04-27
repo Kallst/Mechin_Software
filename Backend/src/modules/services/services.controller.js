@@ -49,8 +49,18 @@ const getActiveServiceForClient = async (req, res) => {
     console.log('🔍 clienteId desde token:', clienteId);
     try {
         const service = await servicesService.getActiveService(clienteId);
-        console.log('🔍 servicio encontrado:', service ? `id=${service.id} estado=${service.estado}` : 'null');
+        
         if (service) {
+            // Verificamos si este servicio ya fue calificado en la base de datos
+            const califResult = await db.query(
+                'SELECT id FROM calificaciones WHERE servicio_id = $1 LIMIT 1',
+                [service.id]
+            );
+            
+            // Inyectamos la propiedad calificado (true/false)
+            service.calificado = califResult.rows.length > 0;
+
+            console.log('🔍 servicio encontrado:', `id=${service.id} estado=${service.estado} calificado=${service.calificado}`);
             res.json({ ok: true, service });
         } else {
             res.json({ ok: false, message: 'No hay servicios activos' });

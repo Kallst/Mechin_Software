@@ -43,6 +43,8 @@ const MechanicDashboard = () => {
     const [activeService, setActiveService]     = useState(null);
     const [isAvailable, setIsAvailable]         = useState(false);
     const [showChat, setShowChat]               = useState(false);
+    // --- NUEVO ESTADO PARA ESPECIALIDADES ---
+    const [specialties, setSpecialties]         = useState([]); 
     const mapRef = useRef(null);
 
     const [chatMessages, setChatMessages] = useState([]);
@@ -134,6 +136,21 @@ const MechanicDashboard = () => {
         if (currentUser) setUser(currentUser);
     }, []);
 
+    // --- CARGAR ESPECIALIDADES ---
+    const loadSpecialties = useCallback(async () => {
+        if (!user) return;
+        try {
+            const response = await fetch(
+                `http://localhost:5000/api/mechanics/profile/${user.id}/specialties`,
+                { headers: authHeaders() }
+            );
+            const data = await response.json();
+            if (data.ok) setSpecialties(data.specialties);
+        } catch (error) {
+            console.error("Error cargando especialidades:", error);
+        }
+    }, [user]);
+
     const loadProfile = useCallback(async () => {
         if (!user) return;
         try {
@@ -145,11 +162,12 @@ const MechanicDashboard = () => {
             if (data.ok) {
                 setProfile(data.profile);
                 setIsAvailable(data.profile.disponible);
+                loadSpecialties(); // Cargar especialidades una vez tenemos el perfil
             }
         } catch (error) {
             console.error("Error cargando perfil:", error);
         }
-    }, [user]);
+    }, [user, loadSpecialties]);
 
     const fetchPendingRequests = useCallback(async () => {
         if (!profile) return;
@@ -273,7 +291,6 @@ const MechanicDashboard = () => {
 
                 <div className="sb-section">Mecánico</div>
                 <div className="sb-item active">Panel de Solicitudes</div>
-                <div className="sb-item">Mi Perfil</div>
                 <div className="sb-item" onClick={() => navigate('/historial-ingresos')} style={{ cursor: 'pointer' }}>
                     Historial de ingresos
                 </div>
@@ -291,7 +308,8 @@ const MechanicDashboard = () => {
                     </div>
                 </div>
 
-                <div className="sb-user">
+                {/* AQUÍ SE AGREGÓ EL ONCLICK Y EL CURSOR PARA IR AL PERFIL */}
+                <div className="sb-user" onClick={() => navigate('/perfil-mecanico')} style={{ cursor: 'pointer' }}>
                     <div className="sb-avatar">
                         {getInitials(user?.nombreCompleto || user?.nombre_completo)}
                     </div>
@@ -299,7 +317,13 @@ const MechanicDashboard = () => {
                         <div className="sb-uname">
                             {user?.nombreCompleto || user?.nombre_completo || 'Mecánico'}
                         </div>
-                        <div className="sb-urole">Mecánico</div>
+                        <div className="sb-urole">
+                            Mecánico • {profile?.estado_validacion === 'aprobado' ? '✅ Verificado' : '⏳ Pendiente'}
+                        </div>
+                        {/* --- MUESTRA DE ESPECIALIDADES --- */}
+                        <div className="sb-specialties" style={{ fontSize: '10px', color: 'var(--muted2)', marginTop: '4px' }}>
+                            {specialties.length > 0 ? specialties.map(s => s.nombre).join(', ') : 'Sin especialidades'}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -323,6 +347,13 @@ const MechanicDashboard = () => {
                 </div>
 
                 <div className="content">
+
+                    {/* MENSAJE DE VALIDACIÓN PENDIENTE */}
+                    {profile?.estado_validacion === 'pendiente' && (
+                        <div className="validation-alert" style={{ background: '#fff3cd', padding: '12px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #ffeeba', fontSize: '14px', color: '#856404' }}>
+                            <strong>Aviso:</strong> Tu perfil está en proceso de validación por Mechin. Podrás recibir solicitudes, pero mantén tus documentos al día.
+                        </div>
+                    )}
 
                     <div className="greeting">
                         <div>

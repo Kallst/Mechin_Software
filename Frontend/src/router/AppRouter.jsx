@@ -15,8 +15,9 @@ import AdminDashboard    from '../pages/dashboard/AdminDashboard';
 import StoreDashboard    from '../pages/dashboard/StoreDashboard';
 
 // Perfil de Usuario
-import ProfilePage     from '../pages/profile/ProfilePage';
-import EditProfilePage from '../pages/profile/EditProfilePage';
+import ProfilePage         from '../pages/profile/ProfilePage';
+import EditProfilePage     from '../pages/profile/EditProfilePage';
+import MechanicProfilePage from '../pages/profile/MechanicProfilePage';// <--- Nueva Importación
 
 // Catálogo de Repuestos
 import CatalogPage    from '../pages/catalog/CatalogPage';
@@ -130,6 +131,15 @@ const AppRouter = () => {
         element={
           <ProtectedRoute>
             <EditProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      {/* RUTA NUEVA PARA EL PERFIL DEL MECÁNICO */}
+      <Route
+        path="/perfil-mecanico"
+        element={
+          <ProtectedRoute allowedRoles={['mecanico']}>
+            <MechanicProfilePage />
           </ProtectedRoute>
         }
       />

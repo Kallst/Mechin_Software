@@ -1,29 +1,30 @@
-const pool = require('../../config/db'); // Ajusta la ruta a tu conexión de BD
+const db = require('../../config/db'); // Importamos lo que sea que exporte tu db.js
 
 const createReview = async (servicioId, clienteId, mecanicoId, puntaje, contenido) => {
-    const client = await pool.connect();
     try {
-        await client.query('BEGIN');
-
         // 1. Insertar la calificación
-        const resCalificacion = await client.query(
+        // Usamos db.query directamente. Si db es una función, usamos db('SQL').
+        const query = typeof db.query === 'function' ? db.query.bind(db) : db;
+
+        const resCalificacion = await query(
             `INSERT INTO calificaciones (servicio_id, cliente_id, mecanico_id, puntaje) 
              VALUES ($1, $2, $3, $4) RETURNING id`,
             [servicioId, clienteId, mecanicoId, puntaje]
         );
 
-        // 2. Insertar el comentario asociado
-        if (contenido) {
-            await client.query(
+        const calificacionId = resCalificacion.rows[0].id;
+
+        // 2. Insertar el comentario asociado (si existe)
+        if (contenido && contenido.trim() !== "") {
+            await query(
                 `INSERT INTO comentarios (calificacion_id, cliente_id, contenido) 
                  VALUES ($1, $2, $3)`,
-                [resCalificacion.rows[0].id, clienteId, contenido]
+                [calificacionId, clienteId, contenido]
             );
         }
 
-        // 3. RECALCULAR PROMEDIO (MECHIN-54)
-        // Obtenemos el promedio de todas las calificaciones de este mecánico
-        const stats = await client.query(
+        // 3. Obtener nuevas estadísticas del mecánico
+        const stats = await query(
             `SELECT AVG(puntaje) as promedio, COUNT(*) as total 
              FROM calificaciones WHERE mecanico_id = $1`,
             [mecanicoId]
@@ -31,21 +32,20 @@ const createReview = async (servicioId, clienteId, mecanicoId, puntaje, contenid
 
         const { promedio, total } = stats.rows[0];
 
-        // 4. Actualizar el perfil del mecánico con los nuevos datos
-        await client.query(
+        // 4. Actualizar el perfil del mecánico
+        // Nota: Según tu init.sql, la columna es 'total_servicios'
+        await query(
             `UPDATE perfiles_mecanico 
              SET promedio_rating = $1, total_servicios = $2 
              WHERE id = $3`,
             [parseFloat(promedio).toFixed(2), total, mecanicoId]
         );
 
-        await client.query('COMMIT');
         return { success: true, nuevoPromedio: promedio };
+        
     } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-    } finally {
-        client.release();
+        console.error("Error detallado en createReview:", error);
+        throw error; // Re-lanzamos para que el controlador lo capture
     }
 };
 
